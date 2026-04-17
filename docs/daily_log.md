@@ -2132,3 +2132,7 @@ Expected: toks/fwd 3.01 → ~3.25, TPOT 6.80 → ~6.30 ms, interact → 159 (sti
 - Organized /projects/teamA inventory — SERVER_MAP.md documents full layout
 - Separation-of-concerns brief for Kimi Opus written (BRIEF_FOR_KIMI_OPUS.md)
 
+
+### Credential note (Apr 18)
+- First GitHub push used PAT-embedded URL; Windows Credential Manager cached user as "x-access-token".
+- Re-pushing to force credential re-selection as "Danishlynx".
