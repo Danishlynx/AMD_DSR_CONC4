@@ -1,4 +1,48 @@
-# DSR1 CONC=4 — FINAL PUSH current state (Apr 18 ~15:15 UTC)
+# DSR1 CONC=4 — FINAL PUSH current state (Apr 18 17:00 UTC)
+
+## 🔴 CRITICAL — real profile data overturns old bottleneck model
+
+**Measured at DEC-075 state via torch.profiler, rank 0, 32-output-token generation:**
+
+```
+Rank  Kernel                                  ms       %
+────────────────────────────────────────────────────────────
+ 1    hipEventSynchronize (GPU idle)         65.83   25.5%   ← BIGGEST
+ 2    moe_gemm1_0 (FlyDSL MoE stage 1)        30.58   11.8%
+ 3    reduce_scatter_cross_device_store       16.46    6.4%
+ 4    moe_gemm2_0 (FlyDSL MoE stage 2)        15.54    6.0%
+ 5    hipLaunchKernel (CPU→GPU dispatch)     15.09    5.8%
+ 6    mla_a8w8_qh32_qseqlen4_gqaratio32_ps    7.83    3.0%
+ ...
+Category aggregation:
+  GPU idle (sync)        25.5%   ← BIGGEST
+  MoE GEMM               17.8%
+  AllReduce              ~7.5%
+  BF16 GEMM              ~10.5%
+  MLA attention          ~5.5%
+  Launch overhead         5.8%
+  RMSNorm+quant          ~4%
+  Other                  ~23%
+```
+
+**What changed vs our pre-profile mental model (from DEC-057):**
+- MoE: 27% → 17.8% (smaller than thought)
+- MLA: 16% → 3% (MUCH smaller)
+- BF16 GEMM: 21% → 10.5%
+- hipEventSynchronize: NOT MEASURED → **25.5%** (this is the real biggest)
+
+**NEW biggest lever** (data-driven):
+1. **Full-step HIP graph capture** (main fwd) — attacks 25.5% sync + 5.8% launch = 31%. Expected 5-10 ms step savings.
+2. Custom 1-shot AllReduce — attacks ~7.5%. Weeks of HIP work.
+3. Kernel fusion — attacks launch overhead. Weeks of HIP work.
+
+**Tree speculation is LOWER priority now** — it attacks compute side, but compute is only ~50% of step time. Sync + launch overhead is 30%+ and targetable with HIP graphs.
+
+**Full details**: `memory/project_dec075_profile_reality.md` (auto-loaded memory).
+
+---
+
+# DSR1 CONC=4 — OLDER STATE (Apr 18 ~15:15 UTC, pre-profile)
 
 ## Latest experiments (Apr 18 after SSH access granted)
 

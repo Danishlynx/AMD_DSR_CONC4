@@ -2177,3 +2177,43 @@ Predicted ~5-7% TPOT improvement; got ~2.4%. Possibilities:
 - Drafter has overhead beyond MoE (MLA, routing, token dispatch)
 
 Still net-positive + every metric improved + no regression. **DEC-075 locked as new floor above DEC-073.**
+
+---
+
+## DEC-075 PROFILE (Apr 18 17:00 UTC) — reality check on bottlenecks
+
+Ran torch.profiler on DEC-075 config (bs=4, ISL=8192, OSL=32, TP=4). Trace captured 258 ms of GPU kernel work.
+
+### Top 10 kernels by wall-clock
+
+| Rank | Kernel | ms | Calls | Avg μs | % GPU |
+|---|---|---|---|---|---|
+| 1 | hipEventSynchronize (GPU idle) | 65.83 | 40 | 1645.6 | 25.5% |
+| 2 | moe_gemm1_0 (FlyDSL MoE stage 1) | 30.58 | 613 | 49.9 | 11.8% |
+| 3 | reduce_scatter_cross_device_store | 16.46 | 1230 | 13.4 | 6.4% |
+| 4 | moe_gemm2_0 (FlyDSL MoE stage 2) | 15.54 | 613 | 25.4 | 6.0% |
+| 5 | hipLaunchKernel (CPU→GPU dispatch) | 15.09 | 1710 | 8.8 | 5.8% |
+| 6 | mla_a8w8_qh32_qseqlen4_gqaratio32_ps | 7.83 | 558 | 14.0 | 3.0% |
+| 7 | Cijk_Alik hgemm BF16 | 7.35 | 549 | 13.4 | 2.8% |
+| 8 | hgemm_bf16_32x64x128_S2TN | 6.31 | 549 | 11.5 | 2.4% |
+| 9 | kn_mla_reduce_v1 | 5.98 | 558 | 10.7 | 2.3% |
+| 10 | ck_tile MoeSortingKernel | 5.95 | 531 | 11.2 | 2.3% |
+
+### Overturns DEC-057 mental model
+
+| Component | DEC-057 said | Profile says | Change |
+|---|---|---|---|
+| MoE GEMM | 27% | 17.8% | smaller |
+| MLA attention | 16% | 3.0% | MUCH smaller |
+| BF16 GEMM | 21% | ~10.5% | smaller |
+| AllReduce | 14% | ~7.5% | smaller |
+| **Sync overhead** | not captured | **25.5%** | BIGGEST |
+| Launch overhead | not captured | 5.8% | new |
+
+### Implication: NEW biggest lever is HIP graph capture
+
+31% of GPU time is sync + launch overhead. Full-step HIP graph (wrapping main forward) would collapse most of it. This is potentially worth 5-10 ms step time = 25-50% TPOT improvement.
+
+Trace location: `/tmp/dec075_profile/rank_*/DSR1-drafter-FP4_ts_20260417_164907_*.pt.trace.json.gz`
+Parser: `scripts/parse_trace.py`
+
