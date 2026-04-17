@@ -1,46 +1,111 @@
-# DSR1 CONC=4 — FINAL PUSH current state (Apr 18 17:00 UTC)
+# DSR1 CONC=4 — Current state (Apr 17 evening, post-investigation)
 
-## 🔴 CRITICAL — real profile data overturns old bottleneck model
+## 🔴 REVISED BOTTLENECK ANALYSIS — tree spec is the only viable gate-closer
 
-**Measured at DEC-075 state via torch.profiler, rank 0, 32-output-token generation:**
+**The earlier "full-step HIP graph" conclusion was WRONG** after code investigation.
+
+### What's TRUE (measured via torch.profiler at DEC-075):
 
 ```
 Rank  Kernel                                  ms       %
 ────────────────────────────────────────────────────────────
- 1    hipEventSynchronize (GPU idle)         65.83   25.5%   ← BIGGEST
+ 1    hipEventSynchronize (GPU idle)         65.83   25.5%
  2    moe_gemm1_0 (FlyDSL MoE stage 1)        30.58   11.8%
  3    reduce_scatter_cross_device_store       16.46    6.4%
  4    moe_gemm2_0 (FlyDSL MoE stage 2)        15.54    6.0%
  5    hipLaunchKernel (CPU→GPU dispatch)     15.09    5.8%
  6    mla_a8w8_qh32_qseqlen4_gqaratio32_ps    7.83    3.0%
- ...
-Category aggregation:
-  GPU idle (sync)        25.5%   ← BIGGEST
-  MoE GEMM               17.8%
-  AllReduce              ~7.5%
-  BF16 GEMM              ~10.5%
-  MLA attention          ~5.5%
-  Launch overhead         5.8%
-  RMSNorm+quant          ~4%
-  Other                  ~23%
 ```
 
-**What changed vs our pre-profile mental model (from DEC-057):**
-- MoE: 27% → 17.8% (smaller than thought)
-- MLA: 16% → 3% (MUCH smaller)
-- BF16 GEMM: 21% → 10.5%
-- hipEventSynchronize: NOT MEASURED → **25.5%** (this is the real biggest)
+### What's FALSE (my earlier interpretation):
 
-**NEW biggest lever** (data-driven):
-1. **Full-step HIP graph capture** (main fwd) — attacks 25.5% sync + 5.8% launch = 31%. Expected 5-10 ms step savings.
-2. Custom 1-shot AllReduce — attacks ~7.5%. Weeks of HIP work.
-3. Kernel fusion — attacks launch overhead. Weeks of HIP work.
+> ❌ "HIP graphs would wrap multiple kernels into one launch, cut 31%"
 
-**Tree speculation is LOWER priority now** — it attacks compute side, but compute is only ~50% of step time. Sync + launch overhead is 30%+ and targetable with HIP graphs.
+**Main forward IS ALREADY graph-captured** at [model_runner.py:1741-1833](atom/model_engine/model_runner.py#L1741). Decode path replays graph at line 1580. Default capture set `[1,2,4,8,16,32,48,64,128,256]` × max_q_len=4 covers bs=4.
 
-**Full details**: `memory/project_dec075_profile_reality.md` (auto-loaded memory).
+The 25.5% `hipEventSynchronize` is NOT inter-kernel sync inside main fwd. It's CPU-side `event.synchronize()` waiting for async GPU→CPU token copies BETWEEN steps (4 syncs per MTP step × 8 steps × 1.6 ms avg):
+
+- [model_runner.py:158](atom/model_engine/model_runner.py#L158) — recv rejected count
+- [model_runner.py:159](atom/model_engine/model_runner.py#L159) — recv bonus count
+- [model_runner.py:214](atom/model_engine/model_runner.py#L214) — recv sampled tokens
+- [model_runner.py:453](atom/model_engine/model_runner.py#L453) — recv draft tokens
+
+**Cross-step CPU sync cannot be absorbed by a graph.** Architectural pipeline lag.
+
+### Step time breakdown (data-driven, per step):
+
+| Component | ms | % | Already optimized? |
+|---|---|---|---|
+| Main fwd GPU compute | ~10.0 | 60% | ✓ graph-captured, kernels tuned |
+| Drafter GPU compute (3×) | ~1.2 | 7% | ✓ FP4 fast path via DEC-075 |
+| CPU↔GPU sync (4/step) | ~6.4 | 38% | Hard — fuse 2 syncs = ~5% win |
+| Kernel launch overhead | ~1.8 | 10% | ✓ batched in graph |
+| **Step total (measured)** | **~17** | | |
+| **TPOT @ 2.5 tok/step** | **6.74 ms** | | |
+
+### Gate math (binding: E2E ≤ 5000 → TPOT ≤ 4.52):
+
+- **Compute is near theoretical floor** — can't drop main_fwd below ~10 ms at TP=4 without kernel rewrite.
+- **Non-compute sync is architectural** — not removable without major refactor.
+- **Only path to gate**: increase tokens/step from 2.5 → 3.75+. This requires **tree speculation** (EAGLE-2).
+
+### mtp_k=4 chain (tested Apr 17 evening) — DEAD
+
+Launched `--num-speculative-tokens 4`. Engine crashed during graph capture at bs=256 max_q_len=5. Root cause: aiter MLA kernel has ONLY qseqlen={2, 4} variants. No qseqlen=5 kernel. Confirmed via aiter/hsa/gfx950/mla/ grep.
+
+### Tree spec feasibility (research summary)
+
+- SGLang's MLA tree verify uses the **same `mla_decode_fwd` kernel**, not extend_attention_fwd. Tree encoded via qo_indptr layout, NOT per-query mask.
+- Best topology for qseqlen=4 constraint: **depth-3 tree, 4 leaves, bs×4 batch expansion** — each leaf = separate "sequence" of length 4 sharing KV ancestors.
+- EAGLE-2 paper: tree depth-3 14 nodes → 3.6-4.1 tok/step (vs chain 2.6-3.1). Our expected: 2.5 → 3.5-3.8.
+- Cost: 4× MLA verify wall-clock (batch expansion). Adds ~2 ms/step. New step ~19 ms, TPOT = 19/3.6 = **5.28 ms** — doesn't quite hit 4.52 gate but gets closest possible without kernel work.
+
+### Danish mandate (Apr 17 evening): Tree spec "no matter what"
+
+- "we will do tree and that my order, after mtp4 check"
+- "tree has to be done with best optimization, do proper research on it"
+- "overwrite old rule, new rule is tree is the one we will do it no matter what"
+- "we will start tree after few hours, i will update you"
+
+**Status: Tree spec ON HOLD pending Danish signal. Research done, implementation plan ready. Will resume when told.**
 
 ---
+
+## Tree spec implementation plan (ready to execute)
+
+### Topology (qseqlen=4 constrained)
+
+```
+Root (prev accepted token) → Level 1: top-2 drafts
+                           → Level 2: top-1 per parent (2 nodes)
+                           → Level 3: top-1 per parent (2 nodes)
+= 4 leaves × depth-3 paths, each path = 4 positions (fits qseqlen=4)
+```
+
+### Changes needed
+
+1. **[eagle.py:193 propose loop](atom/spec_decode/eagle.py#L193)** — replace `logits.argmax` with `logits.topk(2)` at i=0; keep argmax at i=1,2 but run on 2*bs batch
+2. **[rejection_sampler.py](atom/model_ops/rejection_sampler.py)** — add tree verify path: evaluate 2 candidate chains per seq, pick longest-accepted prefix
+3. **[model_runner.py postprocess](atom/model_engine/model_runner.py)** — handle bs×2 batch in verify step (tokens accepted per seq variable)
+4. **[tree_spec.py](atom/spec_decode/tree_spec.py)** — already 40% done; use topology builder with topk_per_level=[2,1,1] (not [2,2,2] due to qseqlen constraint)
+
+### Risk register
+
+- Main fwd graph captured at bs=4, max_q_len=4. Batch expansion bs×2=8 changes the (bs, max_q_len) tuple → requires new graph bucket at (8, 4) which IS captured. ✓
+- Graph-captured attention may assume fixed cu_seqlens_q → need to ensure cu_seqlens_q = [0,4,8,12,16] at bs*2=8 works with capture buckets
+- GSM8K risk — tree rejection is stricter, need to match/exceed 0.93
+
+### Test protocol
+
+1. Implement → sanity test (server boots, generates 1 token correctly)
+2. GSM8K bit-identical probe (greedy @ temp=0, compare to DEC-075 greedy)
+3. If bit-identical, bench perf
+4. Regression test: if TPOT > 6.9 ms, abort and revert
+5. If green: push to GitHub as DEC-076
+
+---
+
+# HISTORICAL (Apr 18 ~15:15 UTC, pre-profile)
 
 # DSR1 CONC=4 — OLDER STATE (Apr 18 ~15:15 UTC, pre-profile)
 

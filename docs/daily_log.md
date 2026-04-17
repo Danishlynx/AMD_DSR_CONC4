@@ -2217,3 +2217,90 @@ Ran torch.profiler on DEC-075 config (bs=4, ISL=8192, OSL=32, TP=4). Trace captu
 Trace location: `/tmp/dec075_profile/rank_*/DSR1-drafter-FP4_ts_20260417_164907_*.pt.trace.json.gz`
 Parser: `scripts/parse_trace.py`
 
+---
+
+## 2026-04-17 evening — HIP graph lever FALSIFIED, mtp_k=4 blocked, tree spec is the only real path
+
+### Investigation: "full-step HIP graph" claim is FALSE
+
+Read `/workspace/ATOM_main/atom/model_engine/model_runner.py`:
+- Line 1741-1833 `capture_cudagraph()` — MAIN forward IS already graph-captured for bs ∈ [1,2,4,8,16,32,48,64,128,256] × max_q_len=4
+- Line 1580 `self.graphs[graph_key].replay()` — decode path replays graph (not eager)
+- Launch has no `--enforce-eager`, default graph set includes bs=4
+
+**So where does the 25.5% hipEventSync come from?** Lines 107-134 — it's CPU-side `event.synchronize()` waits for async GPU→CPU token ID copies BETWEEN steps:
+- `recv_async_output(self.rejected_tokens_cpu)` at line 158
+- `recv_async_output(self.bonus_tokens_cpu)` at line 159
+- `recv_async_output(self.token_ids_cpu)` at line 214 (sample)
+- `recv_async_output_draft()` at line 453 (draft)
+
+4 syncs per MTP step × 8 steps = 32 events × 1.6 ms avg = ~50 ms. Measured was 40 events / 65.8 ms, close match (some syncs had >1 attempt).
+
+**This is architectural CPU↔GPU pipeline lag, NOT missing graph.** Graph wrapping cannot absorb cross-step CPU syncs. Memory `project_dec075_profile_reality.md` corrected accordingly.
+
+### Re-analysis of DEC-075 step budget
+
+| Component | Per step (ms) | % | Recoverable? |
+|---|---|---|---|
+| Main fwd GPU compute | ~10 | 60% | Already optimized |
+| Drafter GPU compute (3 calls) | ~0.4 × 3 = 1.2 | 7% | Already FP4 fast path via DEC-075 |
+| CPU↔GPU sync waits (4/step) | ~6.4 | 38% | Hard — fuse 2 syncs = ~5% TPOT win |
+| Kernel launch overhead | ~1.8 | 10% | Already batched inside graph |
+| **Step total (measured)** | **~17** | | |
+| **TPOT @ 2.5 tok/step** | **6.74 ms** | | |
+
+**Gate: TPOT ≤ 4.52 → need step 11.3 ms OR tokens/step ≥ 3.75. Compute already near theoretical floor. Only way: more tokens/step via tree speculation.**
+
+### mtp_k=4 experiment — DEAD
+
+Launched server with `--num-speculative-tokens 4`. CRASHED during graph capture:
+```
+Capturing bs=256, max_q_len=5: 0%
+RuntimeError: Engine Core Mgr: Received unexpected SHUTDOWN signal from DP rank 0 during initialization
+```
+
+**Root cause**: aiter MLA kernel has ONLY `qseqlen=2` and `qseqlen=4` variants (`mla_a8w8_qh32_qseqlen2_*` and `mla_a8w8_qh32_qseqlen4_*`). No kernel for qseqlen=5. Graph capture fails at max_q_len=5.
+
+**Confirmed architectural wall**: at mtp_k=3, qseqlen=4 (matches). At mtp_k≥4, needs kernel that doesn't exist.
+
+Grep result on server:
+```
+qseqlen2
+qseqlen4
+```
+Only those two. No qseqlen=8 or larger anywhere in aiter/hsa/gfx950/mla/.
+
+### Tree speculation: the only viable path, constrained by qseqlen=4
+
+Tree spec research summary (via subagent, SGLang + EAGLE-2 paper):
+
+1. **SGLang's MLA tree verify uses the SAME mla_decode_fwd kernel** (not extend_attention_fwd). Tree structure is encoded via qo_indptr layout, NOT via custom attention mask. Production AITER ASM MLA kernel does NOT support per-query mask.
+
+2. **Best topology for qseqlen=4 constraint**: depth-3 tree with 4 leaves (root-shared prefix), verified as **bs×4 batch expansion at qseqlen=4** — each leaf path is a separate "sequence" of length 4 sharing KV with siblings at the ancestor positions.
+
+3. **EAGLE-2 acceptance rates** (from paper):
+   - Chain MTP=3: 2.6-3.1 tok/step
+   - Tree depth-3 14 nodes: 3.6-4.1 tok/step
+   - Expected gain at our DEC-075: 2.5 → 3.5-3.8 tok/step
+
+4. **Cost estimate**: 4× MLA verify wall-clock (batch ×4). If ~3 ms MLA per step now, tree adds ~2 ms per step. New step = 19 ms. TPOT = 19/3.6 = **5.28 ms**. Doesn't quite hit 4.52 gate but gets closest possible.
+
+### Decision: Tree spec ON HOLD pending Danish signal
+
+Danish instruction at 2026-04-17 evening: "we will start tree after few hours, i will update you." Tree spec = the MANDATE ("no matter what"), overriding the 24h timeline rule. Will resume implementation when Danish signals.
+
+### Reproducibility of DEC-075 floor (Apr 17 evening, 3rd reproduction)
+
+| Run | File | TPOT med | TPOT mean | Thr/GPU (÷4) | E2E med | ITL med | Interactivity |
+|---|---|---|---|---|---|---|---|
+| LANDED | test_162646 | 6.54 | 6.39 | 1297 | 7056 | 16.5 | 153 |
+| Re-1 (buggy launch) | test_172936 | 7.22 | 7.18 | 1176 | 7793 | 12.1 (mtp_k=1 !!) | 140 |
+| Re-2 (buggy launch) | test_174522 | 7.14 | 7.07 | 1195 | 7721 | 12.0 (mtp_k=1 !!) | — |
+| REPRO (full config) | test_174928 | 6.74 | 6.43 | 1278 | 7253 | 16.46 (mtp_k=3 ✓) | 148 |
+
+**Lesson learned**: `bash launch_atom_server.sh` alone launches WITHOUT `--num-speculative-tokens 3` → defaults to mtp_k=1 → 7+ TPOT. Full launch recipe (env vars + explicit flag + correct cwd) required. Documented in `docs/best_reproduce.md` and memory `project_dec075_progress.md`.
+
+Key verify markers on boot log:
+- `Capturing bs=4, max_q_len=4` → mtp_k=3 ✓
+- `flydsl_moe1_afp4_wfp4_bf16_t32x32x256_w3_fq` at bs=4 → drafter FP4 fast path ✓
+
