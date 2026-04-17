@@ -1,0 +1,952 @@
+[aiter] import [module_aiter_core] under /projects/teamA/danish/repos/aiter/aiter/jit/module_aiter_core.so
+[atom 04:35:41] Loading tokenizer from amd/DeepSeek-R1-0528-MXFP4...
+[atom 04:35:41] Initializing engine with model amd/DeepSeek-R1-0528-MXFP4...
+[atom 04:35:41] hf config is: DeepseekV3Config {
+  "architectures": [
+    "DeepSeekMTPModel"
+  ],
+  "attention_bias": false,
+  "attention_dropout": 0.0,
+  "auto_map": {
+    "AutoConfig": "configuration_deepseek.DeepseekV3Config",
+    "AutoModel": "modeling_deepseek.DeepseekV3Model",
+    "AutoModelForCausalLM": "modeling_deepseek.DeepseekV3ForCausalLM"
+  },
+  "bos_token_id": 0,
+  "dtype": "bfloat16",
+  "eos_token_id": 1,
+  "ep_size": 1,
+  "first_k_dense_replace": 3,
+  "head_dim": 64,
+  "hidden_act": "silu",
+  "hidden_size": 7168,
+  "initializer_range": 0.02,
+  "intermediate_size": 18432,
+  "kv_lora_rank": 512,
+  "max_position_embeddings": 163840,
+  "model_type": "deepseek_v3",
+  "moe_intermediate_size": 2048,
+  "moe_layer_freq": 1,
+  "n_group": 8,
+  "n_predict": 1,
+  "n_routed_experts": 256,
+  "n_shared_experts": 1,
+  "norm_topk_prob": true,
+  "num_attention_heads": 128,
+  "num_experts_per_tok": 8,
+  "num_hidden_layers": 61,
+  "num_key_value_heads": 128,
+  "num_nextn_predict_layers": 1,
+  "pad_token_id": 2,
+  "pretraining_tp": 1,
+  "q_lora_rank": 1536,
+  "qk_head_dim": 192,
+  "qk_nope_head_dim": 128,
+  "qk_rope_head_dim": 64,
+  "quantization_config": {
+    "algo_config": null,
+    "exclude": [
+      "re:model.layers.61.*",
+      "model.layers.0.self_attn.q_a_proj",
+      "model.layers.0.self_attn.q_b_proj",
+      "model.layers.0.self_attn.kv_a_proj_with_mqa",
+      "model.layers.0.self_attn.kv_b_proj",
+      "model.layers.0.self_attn.o_proj",
+      "model.layers.1.self_attn.q_a_proj",
+      "model.layers.1.self_attn.q_b_proj",
+      "model.layers.1.self_attn.kv_a_proj_with_mqa",
+      "model.layers.1.self_attn.kv_b_proj",
+      "model.layers.1.self_attn.o_proj",
+      "model.layers.2.self_attn.q_a_proj",
+      "model.layers.2.self_attn.q_b_proj",
+      "model.layers.2.self_attn.kv_a_proj_with_mqa",
+      "model.layers.2.self_attn.kv_b_proj",
+      "model.layers.2.self_attn.o_proj",
+      "model.layers.3.self_attn.q_a_proj",
+      "model.layers.3.self_attn.q_b_proj",
+      "model.layers.3.self_attn.kv_a_proj_with_mqa",
+      "model.layers.3.self_attn.kv_b_proj",
+      "model.layers.3.self_attn.o_proj",
+      "model.layers.4.self_attn.q_a_proj",
+      "model.layers.4.self_attn.q_b_proj",
+      "model.layers.4.self_attn.kv_a_proj_with_mqa",
+      "model.layers.4.self_attn.kv_b_proj",
+      "model.layers.4.self_attn.o_proj",
+      "model.layers.5.self_attn.q_a_proj",
+      "model.layers.5.self_attn.q_b_proj",
+      "model.layers.5.self_attn.kv_a_proj_with_mqa",
+      "model.layers.5.self_attn.kv_b_proj",
+      "model.layers.5.self_attn.o_proj",
+      "model.layers.6.self_attn.q_a_proj",
+      "model.layers.6.self_attn.q_b_proj",
+      "model.layers.6.self_attn.kv_a_proj_with_mqa",
+      "model.layers.6.self_attn.kv_b_proj",
+      "model.layers.6.self_attn.o_proj",
+      "model.layers.7.self_attn.q_a_proj",
+      "model.layers.7.self_attn.q_b_proj",
+      "model.layers.7.self_attn.kv_a_proj_with_mqa",
+      "model.layers.7.self_attn.kv_b_proj",
+      "model.layers.7.self_attn.o_proj",
+      "model.layers.8.self_attn.q_a_proj",
+      "model.layers.8.self_attn.q_b_proj",
+      "model.layers.8.self_attn.kv_a_proj_with_mqa",
+      "model.layers.8.self_attn.kv_b_proj",
+      "model.layers.8.self_attn.o_proj",
+      "model.layers.9.self_attn.q_a_proj",
+      "model.layers.9.self_attn.q_b_proj",
+      "model.layers.9.self_attn.kv_a_proj_with_mqa",
+      "model.layers.9.self_attn.kv_b_proj",
+      "model.layers.9.self_attn.o_proj",
+      "model.layers.10.self_attn.q_a_proj",
+      "model.layers.10.self_attn.q_b_proj",
+      "model.layers.10.self_attn.kv_a_proj_with_mqa",
+      "model.layers.10.self_attn.kv_b_proj",
+      "model.layers.10.self_attn.o_proj",
+      "model.layers.11.self_attn.q_a_proj",
+      "model.layers.11.self_attn.q_b_proj",
+      "model.layers.11.self_attn.kv_a_proj_with_mqa",
+      "model.layers.11.self_attn.kv_b_proj",
+      "model.layers.11.self_attn.o_proj",
+      "model.layers.12.self_attn.q_a_proj",
+      "model.layers.12.self_attn.q_b_proj",
+      "model.layers.12.self_attn.kv_a_proj_with_mqa",
+      "model.layers.12.self_attn.kv_b_proj",
+      "model.layers.12.self_attn.o_proj",
+      "model.layers.13.self_attn.q_a_proj",
+      "model.layers.13.self_attn.q_b_proj",
+      "model.layers.13.self_attn.kv_a_proj_with_mqa",
+      "model.layers.13.self_attn.kv_b_proj",
+      "model.layers.13.self_attn.o_proj",
+      "model.layers.14.self_attn.q_a_proj",
+      "model.layers.14.self_attn.q_b_proj",
+      "model.layers.14.self_attn.kv_a_proj_with_mqa",
+      "model.layers.14.self_attn.kv_b_proj",
+      "model.layers.14.self_attn.o_proj",
+      "model.layers.15.self_attn.q_a_proj",
+      "model.layers.15.self_attn.q_b_proj",
+      "model.layers.15.self_attn.kv_a_proj_with_mqa",
+      "model.layers.15.self_attn.kv_b_proj",
+      "model.layers.15.self_attn.o_proj",
+      "model.layers.16.self_attn.q_a_proj",
+      "model.layers.16.self_attn.q_b_proj",
+      "model.layers.16.self_attn.kv_a_proj_with_mqa",
+      "model.layers.16.self_attn.kv_b_proj",
+      "model.layers.16.self_attn.o_proj",
+      "model.layers.17.self_attn.q_a_proj",
+      "model.layers.17.self_attn.q_b_proj",
+      "model.layers.17.self_attn.kv_a_proj_with_mqa",
+      "model.layers.17.self_attn.kv_b_proj",
+      "model.layers.17.self_attn.o_proj",
+      "model.layers.18.self_attn.q_a_proj",
+      "model.layers.18.self_attn.q_b_proj",
+      "model.layers.18.self_attn.kv_a_proj_with_mqa",
+      "model.layers.18.self_attn.kv_b_proj",
+      "model.layers.18.self_attn.o_proj",
+      "model.layers.19.self_attn.q_a_proj",
+      "model.layers.19.self_attn.q_b_proj",
+      "model.layers.19.self_attn.kv_a_proj_with_mqa",
+      "model.layers.19.self_attn.kv_b_proj",
+      "model.layers.19.self_attn.o_proj",
+      "model.layers.20.self_attn.q_a_proj",
+      "model.layers.20.self_attn.q_b_proj",
+      "model.layers.20.self_attn.kv_a_proj_with_mqa",
+      "model.layers.20.self_attn.kv_b_proj",
+      "model.layers.20.self_attn.o_proj",
+      "model.layers.21.self_attn.q_a_proj",
+      "model.layers.21.self_attn.q_b_proj",
+      "model.layers.21.self_attn.kv_a_proj_with_mqa",
+      "model.layers.21.self_attn.kv_b_proj",
+      "model.layers.21.self_attn.o_proj",
+      "model.layers.22.self_attn.q_a_proj",
+      "model.layers.22.self_attn.q_b_proj",
+      "model.layers.22.self_attn.kv_a_proj_with_mqa",
+      "model.layers.22.self_attn.kv_b_proj",
+      "model.layers.22.self_attn.o_proj",
+      "model.layers.23.self_attn.q_a_proj",
+      "model.layers.23.self_attn.q_b_proj",
+      "model.layers.23.self_attn.kv_a_proj_with_mqa",
+      "model.layers.23.self_attn.kv_b_proj",
+      "model.layers.23.self_attn.o_proj",
+      "model.layers.24.self_attn.q_a_proj",
+      "model.layers.24.self_attn.q_b_proj",
+      "model.layers.24.self_attn.kv_a_proj_with_mqa",
+      "model.layers.24.self_attn.kv_b_proj",
+      "model.layers.24.self_attn.o_proj",
+      "model.layers.25.self_attn.q_a_proj",
+      "model.layers.25.self_attn.q_b_proj",
+      "model.layers.25.self_attn.kv_a_proj_with_mqa",
+      "model.layers.25.self_attn.kv_b_proj",
+      "model.layers.25.self_attn.o_proj",
+      "model.layers.26.self_attn.q_a_proj",
+      "model.layers.26.self_attn.q_b_proj",
+      "model.layers.26.self_attn.kv_a_proj_with_mqa",
+      "model.layers.26.self_attn.kv_b_proj",
+      "model.layers.26.self_attn.o_proj",
+      "model.layers.27.self_attn.q_a_proj",
+      "model.layers.27.self_attn.q_b_proj",
+      "model.layers.27.self_attn.kv_a_proj_with_mqa",
+      "model.layers.27.self_attn.kv_b_proj",
+      "model.layers.27.self_attn.o_proj",
+      "model.layers.28.self_attn.q_a_proj",
+      "model.layers.28.self_attn.q_b_proj",
+      "model.layers.28.self_attn.kv_a_proj_with_mqa",
+      "model.layers.28.self_attn.kv_b_proj",
+      "model.layers.28.self_attn.o_proj",
+      "model.layers.29.self_attn.q_a_proj",
+      "model.layers.29.self_attn.q_b_proj",
+      "model.layers.29.self_attn.kv_a_proj_with_mqa",
+      "model.layers.29.self_attn.kv_b_proj",
+      "model.layers.29.self_attn.o_proj",
+      "model.layers.30.self_attn.q_a_proj",
+      "model.layers.30.self_attn.q_b_proj",
+      "model.layers.30.self_attn.kv_a_proj_with_mqa",
+      "model.layers.30.self_attn.kv_b_proj",
+      "model.layers.30.self_attn.o_proj",
+      "model.layers.31.self_attn.q_a_proj",
+      "model.layers.31.self_attn.q_b_proj",
+      "model.layers.31.self_attn.kv_a_proj_with_mqa",
+      "model.layers.31.self_attn.kv_b_proj",
+      "model.layers.31.self_attn.o_proj",
+      "model.layers.32.self_attn.q_a_proj",
+      "model.layers.32.self_attn.q_b_proj",
+      "model.layers.32.self_attn.kv_a_proj_with_mqa",
+      "model.layers.32.self_attn.kv_b_proj",
+      "model.layers.32.self_attn.o_proj",
+      "model.layers.33.self_attn.q_a_proj",
+      "model.layers.33.self_attn.q_b_proj",
+      "model.layers.33.self_attn.kv_a_proj_with_mqa",
+      "model.layers.33.self_attn.kv_b_proj",
+      "model.layers.33.self_attn.o_proj",
+      "model.layers.34.self_attn.q_a_proj",
+      "model.layers.34.self_attn.q_b_proj",
+      "model.layers.34.self_attn.kv_a_proj_with_mqa",
+      "model.layers.34.self_attn.kv_b_proj",
+      "model.layers.34.self_attn.o_proj",
+      "model.layers.35.self_attn.q_a_proj",
+      "model.layers.35.self_attn.q_b_proj",
+      "model.layers.35.self_attn.kv_a_proj_with_mqa",
+      "model.layers.35.self_attn.kv_b_proj",
+      "model.layers.35.self_attn.o_proj",
+      "model.layers.36.self_attn.q_a_proj",
+      "model.layers.36.self_attn.q_b_proj",
+      "model.layers.36.self_attn.kv_a_proj_with_mqa",
+      "model.layers.36.self_attn.kv_b_proj",
+      "model.layers.36.self_attn.o_proj",
+      "model.layers.37.self_attn.q_a_proj",
+      "model.layers.37.self_attn.q_b_proj",
+      "model.layers.37.self_attn.kv_a_proj_with_mqa",
+      "model.layers.37.self_attn.kv_b_proj",
+      "model.layers.37.self_attn.o_proj",
+      "model.layers.38.self_attn.q_a_proj",
+      "model.layers.38.self_attn.q_b_proj",
+      "model.layers.38.self_attn.kv_a_proj_with_mqa",
+      "model.layers.38.self_attn.kv_b_proj",
+      "model.layers.38.self_attn.o_proj",
+      "model.layers.39.self_attn.q_a_proj",
+      "model.layers.39.self_attn.q_b_proj",
+      "model.layers.39.self_attn.kv_a_proj_with_mqa",
+      "model.layers.39.self_attn.kv_b_proj",
+      "model.layers.39.self_attn.o_proj",
+      "model.layers.40.self_attn.q_a_proj",
+      "model.layers.40.self_attn.q_b_proj",
+      "model.layers.40.self_attn.kv_a_proj_with_mqa",
+      "model.layers.40.self_attn.kv_b_proj",
+      "model.layers.40.self_attn.o_proj",
+      "model.layers.41.self_attn.q_a_proj",
+      "model.layers.41.self_attn.q_b_proj",
+      "model.layers.41.self_attn.kv_a_proj_with_mqa",
+      "model.layers.41.self_attn.kv_b_proj",
+      "model.layers.41.self_attn.o_proj",
+      "model.layers.42.self_attn.q_a_proj",
+      "model.layers.42.self_attn.q_b_proj",
+      "model.layers.42.self_attn.kv_a_proj_with_mqa",
+      "model.layers.42.self_attn.kv_b_proj",
+      "model.layers.42.self_attn.o_proj",
+      "model.layers.43.self_attn.q_a_proj",
+      "model.layers.43.self_attn.q_b_proj",
+      "model.layers.43.self_attn.kv_a_proj_with_mqa",
+      "model.layers.43.self_attn.kv_b_proj",
+      "model.layers.43.self_attn.o_proj",
+      "model.layers.44.self_attn.q_a_proj",
+      "model.layers.44.self_attn.q_b_proj",
+      "model.layers.44.self_attn.kv_a_proj_with_mqa",
+      "model.layers.44.self_attn.kv_b_proj",
+      "model.layers.44.self_attn.o_proj",
+      "model.layers.45.self_attn.q_a_proj",
+      "model.layers.45.self_attn.q_b_proj",
+      "model.layers.45.self_attn.kv_a_proj_with_mqa",
+      "model.layers.45.self_attn.kv_b_proj",
+      "model.layers.45.self_attn.o_proj",
+      "model.layers.46.self_attn.q_a_proj",
+      "model.layers.46.self_attn.q_b_proj",
+      "model.layers.46.self_attn.kv_a_proj_with_mqa",
+      "model.layers.46.self_attn.kv_b_proj",
+      "model.layers.46.self_attn.o_proj",
+      "model.layers.47.self_attn.q_a_proj",
+      "model.layers.47.self_attn.q_b_proj",
+      "model.layers.47.self_attn.kv_a_proj_with_mqa",
+      "model.layers.47.self_attn.kv_b_proj",
+      "model.layers.47.self_attn.o_proj",
+      "model.layers.48.self_attn.q_a_proj",
+      "model.layers.48.self_attn.q_b_proj",
+      "model.layers.48.self_attn.kv_a_proj_with_mqa",
+      "model.layers.48.self_attn.kv_b_proj",
+      "model.layers.48.self_attn.o_proj",
+      "model.layers.49.self_attn.q_a_proj",
+      "model.layers.49.self_attn.q_b_proj",
+      "model.layers.49.self_attn.kv_a_proj_with_mqa",
+      "model.layers.49.self_attn.kv_b_proj",
+      "model.layers.49.self_attn.o_proj",
+      "model.layers.50.self_attn.q_a_proj",
+      "model.layers.50.self_attn.q_b_proj",
+      "model.layers.50.self_attn.kv_a_proj_with_mqa",
+      "model.layers.50.self_attn.kv_b_proj",
+      "model.layers.50.self_attn.o_proj",
+      "model.layers.51.self_attn.q_a_proj",
+      "model.layers.51.self_attn.q_b_proj",
+      "model.layers.51.self_attn.kv_a_proj_with_mqa",
+      "model.layers.51.self_attn.kv_b_proj",
+      "model.layers.51.self_attn.o_proj",
+      "model.layers.52.self_attn.q_a_proj",
+      "model.layers.52.self_attn.q_b_proj",
+      "model.layers.52.self_attn.kv_a_proj_with_mqa",
+      "model.layers.52.self_attn.kv_b_proj",
+      "model.layers.52.self_attn.o_proj",
+      "model.layers.53.self_attn.q_a_proj",
+      "model.layers.53.self_attn.q_b_proj",
+      "model.layers.53.self_attn.kv_a_proj_with_mqa",
+      "model.layers.53.self_attn.kv_b_proj",
+      "model.layers.53.self_attn.o_proj",
+      "model.layers.54.self_attn.q_a_proj",
+      "model.layers.54.self_attn.q_b_proj",
+      "model.layers.54.self_attn.kv_a_proj_with_mqa",
+      "model.layers.54.self_attn.kv_b_proj",
+      "model.layers.54.self_attn.o_proj",
+      "model.layers.55.self_attn.q_a_proj",
+      "model.layers.55.self_attn.q_b_proj",
+      "model.layers.55.self_attn.kv_a_proj_with_mqa",
+      "model.layers.55.self_attn.kv_b_proj",
+      "model.layers.55.self_attn.o_proj",
+      "model.layers.56.self_attn.q_a_proj",
+      "model.layers.56.self_attn.q_b_proj",
+      "model.layers.56.self_attn.kv_a_proj_with_mqa",
+      "model.layers.56.self_attn.kv_b_proj",
+      "model.layers.56.self_attn.o_proj",
+      "model.layers.57.self_attn.q_a_proj",
+      "model.layers.57.self_attn.q_b_proj",
+      "model.layers.57.self_attn.kv_a_proj_with_mqa",
+      "model.layers.57.self_attn.kv_b_proj",
+      "model.layers.57.self_attn.o_proj",
+      "model.layers.58.self_attn.q_a_proj",
+      "model.layers.58.self_attn.q_b_proj",
+      "model.layers.58.self_attn.kv_a_proj_with_mqa",
+      "model.layers.58.self_attn.kv_b_proj",
+      "model.layers.58.self_attn.o_proj",
+      "model.layers.59.self_attn.q_a_proj",
+      "model.layers.59.self_attn.q_b_proj",
+      "model.layers.59.self_attn.kv_a_proj_with_mqa",
+      "model.layers.59.self_attn.kv_b_proj",
+      "model.layers.59.self_attn.o_proj",
+      "model.layers.60.self_attn.q_a_proj",
+      "model.layers.60.self_attn.q_b_proj",
+      "model.layers.60.self_attn.kv_a_proj_with_mqa",
+      "model.layers.60.self_attn.kv_b_proj",
+      "model.layers.60.self_attn.o_proj",
+      "lm_head"
+    ],
+    "export": {
+      "kv_cache_group": [],
+      "min_kv_scale": 0.0,
+      "pack_method": "reorder",
+      "weight_format": "real_quantized",
+      "weight_merge_groups": null
+    },
+    "global_quant_config": {
+      "bias": null,
+      "input_tensors": {
+        "ch_axis": -1,
+        "dtype": "fp4",
+        "group_size": 32,
+        "is_dynamic": true,
+        "is_scale_quant": false,
+        "mx_element_dtype": null,
+        "observer_cls": "PerBlockMXObserver",
+        "qscheme": "per_group",
+        "round_method": "half_even",
+        "scale_calculation_mode": "even",
+        "scale_format": "e8m0",
+        "scale_type": "float",
+        "symmetric": null
+      },
+      "output_tensors": null,
+      "target_device": null,
+      "weight": {
+        "ch_axis": -1,
+        "dtype": "fp4",
+        "group_size": 32,
+        "is_dynamic": false,
+        "is_scale_quant": false,
+        "mx_element_dtype": null,
+        "observer_cls": "PerBlockMXObserver",
+        "qscheme": "per_group",
+        "round_method": "half_even",
+        "scale_calculation_mode": "even",
+        "scale_format": "e8m0",
+        "scale_type": "float",
+        "symmetric": null
+      }
+    },
+    "kv_cache_post_rope": false,
+    "kv_cache_quant_config": {},
+    "layer_quant_config": {},
+    "layer_type_quant_config": {},
+    "quant_method": "quark",
+    "quant_mode": "eager_mode",
+    "softmax_quant_spec": null,
+    "version": "0.11"
+  },
+  "rms_norm_eps": 1e-06,
+  "rope_interleave": true,
+  "rope_scaling": {
+    "beta_fast": 32.0,
+    "beta_slow": 1.0,
+    "factor": 40.0,
+    "mscale": 1.0,
+    "mscale_all_dim": 1.0,
+    "original_max_position_embeddings": 4096,
+    "rope_type": "yarn",
+    "type": "yarn"
+  },
+  "rope_theta": 10000,
+  "routed_scaling_factor": 2.5,
+  "scoring_func": "sigmoid",
+  "tie_word_embeddings": false,
+  "topk_group": 4,
+  "topk_method": "noaux_tc",
+  "transformers_version": "4.57.6",
+  "unsloth_fixed": true,
+  "use_cache": true,
+  "v_head_dim": 128,
+  "vocab_size": 129280
+}
+
+`torch_dtype` is deprecated! Use `dtype` instead!
+[atom 04:35:41] Engine Core Mgr: Creating EngineCore for DP rank 0/1
+[atom 04:35:41] Creating EngineCore process: DP rank 0, will use GPUs 0 to 1
+[atom 04:35:41] Engine Core Mgr: Starting EngineCore for DP rank 0/1
+[aiter] import [module_aiter_core] under /projects/teamA/danish/repos/aiter/aiter/jit/module_aiter_core.so
+[aiter] message queue communication handle: Handle(local_reader_ranks=[0, 1], buffer_handle=(2, 16777216, 10, 'psm_d03fdacf'), local_subscribe_addr='ipc:///tmp/4e535352-4404-4db6-a43a-d7a93c0cae77', remote_subscribe_addr=None, remote_addr_ipv6=False)
+[aiter] import [module_aiter_core] under /projects/teamA/danish/repos/aiter/aiter/jit/module_aiter_core.so
+[aiter] import [module_aiter_core] under /projects/teamA/danish/repos/aiter/aiter/jit/module_aiter_core.so
+[aiter] merge tuned file under model_configs/ and configs/ /projects/teamA/danish/repos/aiter/aiter/configs/bf16_tuned_gemm.csv:/projects/teamA/danish/repos/aiter/aiter/configs/model_configs/dsv3_bf16_tuned_gemm.csv:/projects/teamA/danish/repos/aiter/aiter/configs/model_configs/gptoss_bf16_tuned_gemm.csv:/projects/teamA/danish/repos/aiter/aiter/configs/model_configs/kimik2_bf16_tuned_gemm.csv
+/projects/teamA/danish/repos/aiter/aiter/jit/core.py:214: FutureWarning: The behavior of DataFrame concatenation with empty or all-NA entries is deprecated. In a future version, this will no longer exclude empty or all-NA columns when determining the result dtypes. To retain the old behavior, exclude the relevant entries before the concat operation.
+  merge_df = pd.concat([df for _, df in source_pairs], ignore_index=True)
+[atom 04:35:49] Use MLAAttentionImplDecoratorForPluginMode to decorate MLAAttention
+[atom 04:35:49] Use PagedAttentionImplDecoratorForPluginMode to decorate PagedAttentionImpl
+[aiter] merge tuned file under model_configs/ and configs/ /projects/teamA/danish/repos/aiter/aiter/configs/bf16_tuned_gemm.csv:/projects/teamA/danish/repos/aiter/aiter/configs/model_configs/dsv3_bf16_tuned_gemm.csv:/projects/teamA/danish/repos/aiter/aiter/configs/model_configs/gptoss_bf16_tuned_gemm.csv:/projects/teamA/danish/repos/aiter/aiter/configs/model_configs/kimik2_bf16_tuned_gemm.csv
+[atom 04:35:49] Create lazy wrapper for FusedMoE to change the naming
+/projects/teamA/danish/repos/aiter/aiter/jit/core.py:214: FutureWarning: The behavior of DataFrame concatenation with empty or all-NA entries is deprecated. In a future version, this will no longer exclude empty or all-NA columns when determining the result dtypes. To retain the old behavior, exclude the relevant entries before the concat operation.
+  merge_df = pd.concat([df for _, df in source_pairs], ignore_index=True)
+[atom 04:35:49] Use MLAAttentionImplDecoratorForPluginMode to decorate MLAAttention
+[atom 04:35:49] ModelRunner rank=0, dp_rank_local=0, local_device_rank=0, device=cuda:0
+[atom 04:35:49] Use PagedAttentionImplDecoratorForPluginMode to decorate PagedAttentionImpl
+[atom 04:35:49] Create lazy wrapper for FusedMoE to change the naming
+[atom 04:35:49] ModelRunner rank=1, dp_rank_local=0, local_device_rank=1, device=cuda:1
+[Gloo] Rank 1 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+[Gloo] Rank 0 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+[Gloo] Rank 1 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+[Gloo] Rank 0 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+[aiter] import [module_custom_all_reduce] under /projects/teamA/danish/repos/aiter/aiter/jit/module_custom_all_reduce.so
+[aiter] import [module_custom_all_reduce] under /projects/teamA/danish/repos/aiter/aiter/jit/module_custom_all_reduce.so
+[aiter] load RCCL version: 2.27.7
+[aiter] message queue communication handle: Handle(local_reader_ranks=[1], buffer_handle=(1, 4194304, 6, 'psm_daa8b569'), local_subscribe_addr='ipc:///tmp/dab37f87-293e-4fde-a15b-4b2f59e44919', remote_subscribe_addr=None, remote_addr_ipv6=False)
+[Gloo] Rank 0 is connected to 0 peer ranks. Expected number of connected peer ranks is : 0
+[Gloo] Rank 0 is connected to 0 peer ranks. Expected number of connected peer ranks is : 0
+[Gloo] Rank 0 is connected to 0 peer ranks. Expected number of connected peer ranks is : 0
+[Gloo] Rank 0 is connected to 0 peer ranks. Expected number of connected peer ranks is : 0
+[Gloo] Rank 0 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+[Gloo] Rank 1 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+[aiter] load RCCL version: 2.27.7
+[aiter] rank 0 in world size 2 is assigned as DP rank 0, PP rank 0, TP rank 0, EP rank 0
+[aiter] rank 1 in world size 2 is assigned as DP rank 0, PP rank 0, TP rank 1, EP rank 1
+[atom 04:35:53] Info: Because ATOM_USE_TRITON_GEMM is not turned on in DeepSeek-R1, ATOM_ENABLE_DS_INPUT_RMSNORM_QUANT_FUSION is turned off automatically
+[atom 04:35:53] Info: Because ATOM_USE_TRITON_GEMM is not turned on in DeepSeek-R1, ATOM_ENABLE_DS_INPUT_RMSNORM_QUANT_FUSION is turned off automatically
+[atom 04:35:53] disable_mmap: False
+[atom 04:35:53] disable_mmap: False
+[atom.model_loader.weight_utils 04:35:53] Using model weights format ['*.safetensors']
+[atom.model_loader.weight_utils 04:35:53] Using model weights format ['*.safetensors']
+Loading safetensors shards[amd/DeepSeek-R1-0528-MXFP4]:   0%|          | 0/82 [00:00<?, ?it/s]Loading safetensors shards[amd/DeepSeek-R1-0528-MXFP4]:   2%|▏         | 2/82 [00:00<00:04, 16.31it/s]Loading safetensors shards[amd/DeepSeek-R1-0528-MXFP4]:   6%|▌         | 5/82 [00:00<00:04, 18.66it/s]Loading safetensors shards[amd/DeepSeek-R1-0528-MXFP4]:  10%|▉         | 8/82 [00:00<00:03, 22.34it/s]Loading safetensors shards[amd/DeepSeek-R1-0528-MXFP4]:  13%|█▎        | 11/82 [00:00<00:07, 10.07it/s]Loading safetensors shards[amd/DeepSeek-R1-0528-MXFP4]:  17%|█▋        | 14/82 [00:01<00:05, 12.67it/s]Loading safetensors shards[amd/DeepSeek-R1-0528-MXFP4]:  21%|██        | 17/82 [00:01<00:04, 14.60it/s]Loading safetensors shards[amd/DeepSeek-R1-0528-MXFP4]:  24%|██▍       | 20/82 [00:01<00:03, 16.39it/s]Loading safetensors shards[amd/DeepSeek-R1-0528-MXFP4]:  28%|██▊       | 23/82 [00:01<00:06,  9.59it/s]Loading safetensors shards[amd/DeepSeek-R1-0528-MXFP4]:  32%|███▏      | 26/82 [00:02<00:04, 11.60it/s]Loading safetensors shards[amd/DeepSeek-R1-0528-MXFP4]:  35%|███▌      | 29/82 [00:02<00:03, 13.69it/s]Loading safetensors shards[amd/DeepSeek-R1-0528-MXFP4]:  39%|███▉      | 32/82 [00:02<00:03, 15.43it/s]Loading safetensors shards[amd/DeepSeek-R1-0528-MXFP4]:  43%|████▎     | 35/82 [00:02<00:02, 17.00it/s]Loading safetensors shards[amd/DeepSeek-R1-0528-MXFP4]:  46%|████▋     | 38/82 [00:02<00:02, 18.25it/s]Loading safetensors shards[amd/DeepSeek-R1-0528-MXFP4]:  50%|█████     | 41/82 [00:03<00:04,  9.47it/s]Loading safetensors shards[amd/DeepSeek-R1-0528-MXFP4]:  54%|█████▎    | 44/82 [00:03<00:03, 11.41it/s]Loading safetensors shards[amd/DeepSeek-R1-0528-MXFP4]:  57%|█████▋    | 47/82 [00:03<00:02, 13.38it/s]Loading safetensors shards[amd/DeepSeek-R1-0528-MXFP4]:  61%|██████    | 50/82 [00:03<00:02, 15.17it/s]Loading safetensors shards[amd/DeepSeek-R1-0528-MXFP4]:  65%|██████▍   | 53/82 [00:03<00:01, 16.70it/s]Loading safetensors shards[amd/DeepSeek-R1-0528-MXFP4]:  68%|██████▊   | 56/82 [00:03<00:01, 18.11it/s]Loading safetensors shards[amd/DeepSeek-R1-0528-MXFP4]:  72%|███████▏  | 59/82 [00:04<00:02,  8.68it/s]Loading safetensors shards[amd/DeepSeek-R1-0528-MXFP4]:  76%|███████▌  | 62/82 [00:04<00:01, 10.62it/s]Loading safetensors shards[amd/DeepSeek-R1-0528-MXFP4]:  79%|███████▉  | 65/82 [00:04<00:01, 12.60it/s]Loading safetensors shards[amd/DeepSeek-R1-0528-MXFP4]:  82%|████████▏ | 67/82 [00:05<00:01, 12.45it/s]Loading safetensors shards[amd/DeepSeek-R1-0528-MXFP4]:  85%|████████▌ | 70/82 [00:05<00:00, 14.52it/s]Loading safetensors shards[amd/DeepSeek-R1-0528-MXFP4]:  89%|████████▉ | 73/82 [00:05<00:00, 16.35it/s]Loading safetensors shards[amd/DeepSeek-R1-0528-MXFP4]: 100%|██████████| 82/82 [00:05<00:00, 30.28it/s]Loading safetensors shards[amd/DeepSeek-R1-0528-MXFP4]: 100%|██████████| 82/82 [00:05<00:00, 14.84it/s]
+[atom 04:40:31] Model load done: amd/DeepSeek-R1-0528-MXFP4
+[atom 04:40:31] Loading drafter model...
+[atom 04:40:31] disable_mmap: False
+[atom.model_loader.weight_utils 04:40:31] Using model weights format ['*.safetensors']
+Loading safetensors shards[amd/DeepSeek-R1-0528-MXFP4]:   0%|          | 0/82 [00:00<?, ?it/s]Loading safetensors shards[amd/DeepSeek-R1-0528-MXFP4]:  13%|█▎        | 11/82 [00:00<00:00, 102.17it/s]Loading safetensors shards[amd/DeepSeek-R1-0528-MXFP4]:  27%|██▋       | 22/82 [00:00<00:00, 100.21it/s]Loading safetensors shards[amd/DeepSeek-R1-0528-MXFP4]:  40%|████      | 33/82 [00:00<00:00, 99.58it/s] Loading safetensors shards[amd/DeepSeek-R1-0528-MXFP4]:  54%|█████▎    | 44/82 [00:00<00:00, 100.31it/s]Loading safetensors shards[amd/DeepSeek-R1-0528-MXFP4]:  67%|██████▋   | 55/82 [00:00<00:00, 102.71it/s]Loading safetensors shards[amd/DeepSeek-R1-0528-MXFP4]:  80%|████████  | 66/82 [00:00<00:00, 103.81it/s]Loading safetensors shards[amd/DeepSeek-R1-0528-MXFP4]:  94%|█████████▍| 77/82 [00:00<00:00, 98.64it/s] Loading safetensors shards[amd/DeepSeek-R1-0528-MXFP4]: 100%|██████████| 82/82 [00:00<00:00, 103.13it/s]
+[atom 04:40:40] Assuming the EAGLE head shares the same vocab embedding with the target model.
+[atom 04:40:40] Loading EAGLE LM head weights from the target model.
+[atom 04:40:44] Using cache directory: /tmp/.cache/atom/torch_compile_cache/58c9380853/rank_0/backbone for vLLM's torch.compile
+[atom 04:40:44] Dynamo bytecode transform time: 3.95 s
+[atom 04:40:45] Cache the graph for dynamic shape for later use
+[atom 04:40:46] Compiling a graph for dynamic shape takes 1.63 s
+[atom 04:40:46] Computation graph saved to /tmp/.cache/atom/torch_compile_cache/58c9380853/rank_0/backbone/computation_graph.py
+[aiter] import [module_rmsnorm_quant] under /projects/teamA/danish/repos/aiter/aiter/jit/module_rmsnorm_quant.so
+[aiter] shape is M:10240, N:2112, K:7168 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] import [module_fused_qk_norm_rope_cache_quant_shuffle] under /projects/teamA/danish/repos/aiter/aiter/jit/module_fused_qk_norm_rope_cache_quant_shuffle.so
+[aiter] type hints mismatch, override to --> fused_qk_rmsnorm(q: torch.Tensor, q_weight: torch.Tensor, q_eps: float, k: torch.Tensor, k_weight: torch.Tensor, k_eps: float, q_out: Optional[torch.Tensor], k_out: Optional[torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]
+[aiter] import [module_quant] under /projects/teamA/danish/repos/aiter/aiter/jit/module_quant.so
+[aiter] merge tuned file under model_configs/ and configs/ /projects/teamA/danish/repos/aiter/aiter/configs/a4w4_blockscale_tuned_gemm.csv:/projects/teamA/danish/repos/aiter/aiter/configs/model_configs/dsv3_a4w4_blockscale_tuned_gemm.csv
+[aiter] hipModuleLoad: /projects/teamA/danish/repos/aiter/hsa//gfx950/f4gemm/f4gemm_bf16_per1x32Fp4_BpreShuffle_256x256.co GetFunction: _ZN5aiter42f4gemm_bf16_per1x32Fp4_BpreShuffle_256x256E
+[aiter] hipModuleGetFunction: _ZN5aiter42f4gemm_bf16_per1x32Fp4_BpreShuffle_256x256E Success
+[aiter] import [module_activation] under /projects/teamA/danish/repos/aiter/aiter/jit/module_activation.so
+[aiter] type hints mismatch, override to --> silu_and_mul(out: aiter_tensor_t, input: aiter_tensor_t) -> None
+[aiter] shape is M:10240, N:7168, K:9216, not found tuned config in /tmp/aiter_configs/a4w4_blockscale_tuned_gemm.csv, will use default config!
+[aiter] shape is M:10240, N:256, K:7168 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] import [module_moe_asm] under /projects/teamA/danish/repos/aiter/aiter/jit/module_moe_asm.so
+[aiter] merge tuned file under model_configs/ and configs/ /projects/teamA/danish/repos/aiter/aiter/configs/tuned_fmoe.csv:/projects/teamA/danish/repos/aiter/aiter/configs/model_configs/a8w8_blockscale_tuned_fmoe_glm5.csv:/projects/teamA/danish/repos/aiter/aiter/configs/model_configs/a8w8_blockscale_tuned_fmoe_qwen3_235b.csv:/projects/teamA/danish/repos/aiter/aiter/configs/model_configs/kimik2_fp4_tuned_fmoe.csv:/projects/teamA/danish/repos/aiter/aiter/configs/model_configs/a8w8_blockscale_tuned_fmoe_ds_v3.csv:/projects/teamA/danish/repos/aiter/aiter/configs/model_configs/a8w8_blockscale_tuned_fmoe_minimax-m2_5.csv:/projects/teamA/danish/repos/aiter/aiter/configs/model_configs/dsv3_fp4_tuned_fmoe.csv
+[aiter] run_1stage = False, ksplit = 0 q_type = QuantType.per_1x32 block_m = 128 use_nt = False, estimated_m_per_expert = 573
+[aiter] [fused_moe] using 2stage default for (256, 16384, 7168, 1024, 257, 9, 'ActivationType.Silu', 'torch.bfloat16', 'torch.float4_e2m1fn_x2', 'torch.float4_e2m1fn_x2', 'QuantType.per_1x32', True, False) 
+[aiter] import [module_moe_sorting] under /projects/teamA/danish/repos/aiter/aiter/jit/module_moe_sorting.so
+[aiter] import [module_moe_ck2stages_fp4x2_fp4x2_preshuffle_on_b16_silu_per_1x32_mulWeightStage2_] under /projects/teamA/danish/repos/aiter/aiter/jit/module_moe_ck2stages_fp4x2_fp4x2_preshuffle_on_b16_silu_per_1x32_mulWeightStage2_.so
+[aiter] type hints mismatch, override to --> ck_moe_stage1(hidden_states: torch.Tensor, w1: torch.Tensor, w2: torch.Tensor, sorted_token_ids: torch.Tensor, sorted_expert_ids: torch.Tensor, num_valid_ids: torch.Tensor, out: torch.Tensor, topk: int, kernelName: str = None, w1_scale: Optional[torch.Tensor] = None, a1_scale: Optional[torch.Tensor] = None, block_m: Optional[int] = 32, sorted_weights: Optional[torch.Tensor] = None, quant_type: int = 0, activation: int = 0, splitk: Optional[int] = 1, non_temporal_load: bool = False, dst_type: Optional[str] = None, is_shuffled: bool = True) -> None
+[aiter] type hints mismatch, override to --> ck_moe_stage2(inter_states: torch.Tensor, w1: torch.Tensor, w2: torch.Tensor, sorted_token_ids: torch.Tensor, sorted_expert_ids: torch.Tensor, num_valid_ids: torch.Tensor, out: torch.Tensor, topk: int, kernelName: str = None, w2_scale: Optional[torch.Tensor] = None, a2_scale: Optional[torch.Tensor] = None, block_m: Optional[int] = 32, sorted_weights: Optional[torch.Tensor] = None, quant_type: int = 0, activation: int = 0, splitk: Optional[int] = 1, non_temporal_load: bool = False, dst_type: Optional[str] = None, is_shuffled: bool = True) -> None
+[aiter] shape is M:1, N:64640, K:7168 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] type hints mismatch, override to --> all_gather_unreg(_fa: int, inp: aiter_tensor_t, reg_buffer: int, out: aiter_tensor_t, reg_bytes: int, dim: int) -> None
+[aiter] import [module_sample] under /projects/teamA/danish/repos/aiter/aiter/jit/module_sample.so
+[atom 04:41:03] Model load done: amd/DeepSeek-R1-0528-MXFP4
+[atom 04:41:03] Loading drafter model...
+[atom 04:41:03] disable_mmap: False
+[atom.model_loader.weight_utils 04:41:03] Using model weights format ['*.safetensors']
+[atom 04:41:13] Assuming the EAGLE head shares the same vocab embedding with the target model.
+[atom 04:41:13] Loading EAGLE LM head weights from the target model.
+[atom 04:41:17] Using cache directory: /tmp/.cache/atom/torch_compile_cache/58c9380853/rank_1/backbone for vLLM's torch.compile
+[atom 04:41:17] Dynamo bytecode transform time: 3.54 s
+[atom 04:41:18] Cache the graph for dynamic shape for later use
+[atom 04:41:19] Compiling a graph for dynamic shape takes 1.61 s
+[atom 04:41:19] Computation graph saved to /tmp/.cache/atom/torch_compile_cache/58c9380853/rank_1/backbone/computation_graph.py
+[aiter] import [module_rmsnorm_quant] under /projects/teamA/danish/repos/aiter/aiter/jit/module_rmsnorm_quant.so
+[aiter] shape is M:10240, N:2112, K:7168 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] import [module_fused_qk_norm_rope_cache_quant_shuffle] under /projects/teamA/danish/repos/aiter/aiter/jit/module_fused_qk_norm_rope_cache_quant_shuffle.so
+[aiter] type hints mismatch, override to --> fused_qk_rmsnorm(q: torch.Tensor, q_weight: torch.Tensor, q_eps: float, k: torch.Tensor, k_weight: torch.Tensor, k_eps: float, q_out: Optional[torch.Tensor], k_out: Optional[torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]
+[aiter] import [module_quant] under /projects/teamA/danish/repos/aiter/aiter/jit/module_quant.so
+[aiter] merge tuned file under model_configs/ and configs/ /projects/teamA/danish/repos/aiter/aiter/configs/a4w4_blockscale_tuned_gemm.csv:/projects/teamA/danish/repos/aiter/aiter/configs/model_configs/dsv3_a4w4_blockscale_tuned_gemm.csv
+[aiter] hipModuleLoad: /projects/teamA/danish/repos/aiter/hsa//gfx950/f4gemm/f4gemm_bf16_per1x32Fp4_BpreShuffle_256x256.co GetFunction: _ZN5aiter42f4gemm_bf16_per1x32Fp4_BpreShuffle_256x256E
+[aiter] hipModuleGetFunction: _ZN5aiter42f4gemm_bf16_per1x32Fp4_BpreShuffle_256x256E Success
+[aiter] import [module_activation] under /projects/teamA/danish/repos/aiter/aiter/jit/module_activation.so
+[aiter] type hints mismatch, override to --> silu_and_mul(out: aiter_tensor_t, input: aiter_tensor_t) -> None
+[aiter] shape is M:10240, N:7168, K:9216, not found tuned config in /tmp/aiter_configs/a4w4_blockscale_tuned_gemm.csv, will use default config!
+[aiter] shape is M:10240, N:256, K:7168 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] import [module_moe_asm] under /projects/teamA/danish/repos/aiter/aiter/jit/module_moe_asm.so
+[aiter] merge tuned file under model_configs/ and configs/ /projects/teamA/danish/repos/aiter/aiter/configs/tuned_fmoe.csv:/projects/teamA/danish/repos/aiter/aiter/configs/model_configs/a8w8_blockscale_tuned_fmoe_glm5.csv:/projects/teamA/danish/repos/aiter/aiter/configs/model_configs/a8w8_blockscale_tuned_fmoe_qwen3_235b.csv:/projects/teamA/danish/repos/aiter/aiter/configs/model_configs/kimik2_fp4_tuned_fmoe.csv:/projects/teamA/danish/repos/aiter/aiter/configs/model_configs/a8w8_blockscale_tuned_fmoe_ds_v3.csv:/projects/teamA/danish/repos/aiter/aiter/configs/model_configs/a8w8_blockscale_tuned_fmoe_minimax-m2_5.csv:/projects/teamA/danish/repos/aiter/aiter/configs/model_configs/dsv3_fp4_tuned_fmoe.csv
+[aiter] run_1stage = False, ksplit = 0 q_type = QuantType.per_1x32 block_m = 128 use_nt = False, estimated_m_per_expert = 573
+[aiter] [fused_moe] using 2stage default for (256, 16384, 7168, 1024, 257, 9, 'ActivationType.Silu', 'torch.bfloat16', 'torch.float4_e2m1fn_x2', 'torch.float4_e2m1fn_x2', 'QuantType.per_1x32', True, False) 
+[aiter] import [module_moe_sorting] under /projects/teamA/danish/repos/aiter/aiter/jit/module_moe_sorting.so
+[aiter] import [module_moe_ck2stages_fp4x2_fp4x2_preshuffle_on_b16_silu_per_1x32_mulWeightStage2_] under /projects/teamA/danish/repos/aiter/aiter/jit/module_moe_ck2stages_fp4x2_fp4x2_preshuffle_on_b16_silu_per_1x32_mulWeightStage2_.so
+[aiter] type hints mismatch, override to --> ck_moe_stage1(hidden_states: torch.Tensor, w1: torch.Tensor, w2: torch.Tensor, sorted_token_ids: torch.Tensor, sorted_expert_ids: torch.Tensor, num_valid_ids: torch.Tensor, out: torch.Tensor, topk: int, kernelName: str = None, w1_scale: Optional[torch.Tensor] = None, a1_scale: Optional[torch.Tensor] = None, block_m: Optional[int] = 32, sorted_weights: Optional[torch.Tensor] = None, quant_type: int = 0, activation: int = 0, splitk: Optional[int] = 1, non_temporal_load: bool = False, dst_type: Optional[str] = None, is_shuffled: bool = True) -> None
+[aiter] type hints mismatch, override to --> ck_moe_stage2(inter_states: torch.Tensor, w1: torch.Tensor, w2: torch.Tensor, sorted_token_ids: torch.Tensor, sorted_expert_ids: torch.Tensor, num_valid_ids: torch.Tensor, out: torch.Tensor, topk: int, kernelName: str = None, w2_scale: Optional[torch.Tensor] = None, a2_scale: Optional[torch.Tensor] = None, block_m: Optional[int] = 32, sorted_weights: Optional[torch.Tensor] = None, quant_type: int = 0, activation: int = 0, splitk: Optional[int] = 1, non_temporal_load: bool = False, dst_type: Optional[str] = None, is_shuffled: bool = True) -> None
+[aiter] shape is M:1, N:64640, K:7168 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] type hints mismatch, override to --> all_gather_unreg(_fa: int, inp: aiter_tensor_t, reg_buffer: int, out: aiter_tensor_t, reg_bytes: int, dim: int) -> None
+[aiter] import [module_sample] under /projects/teamA/danish/repos/aiter/aiter/jit/module_sample.so
+[atom 04:41:22] Using cache directory: /tmp/.cache/atom/torch_compile_cache/58c9380853/rank_0/drafter for vLLM's torch.compile
+[atom 04:41:22] Dynamo bytecode transform time: 0.13 s
+[atom 04:41:22] Using cache directory: /tmp/.cache/atom/torch_compile_cache/58c9380853/rank_1/drafter for vLLM's torch.compile
+[atom 04:41:22] Dynamo bytecode transform time: 0.14 s
+[atom 04:41:22] Cache the graph for dynamic shape for later use
+[atom 04:41:22] Cache the graph for dynamic shape for later use
+[atom 04:41:22] Compiling a graph for dynamic shape takes 0.35 s
+[atom 04:41:22] Computation graph saved to /tmp/.cache/atom/torch_compile_cache/58c9380853/rank_0/drafter/computation_graph.py
+[atom 04:41:22] Compiling a graph for dynamic shape takes 0.36 s
+[atom 04:41:22] Computation graph saved to /tmp/.cache/atom/torch_compile_cache/58c9380853/rank_1/drafter/computation_graph.py
+[aiter] run_1stage = False, ksplit = 0 q_type = QuantType.No block_m = 128 use_nt = False, estimated_m_per_expert = 573
+[aiter] [fused_moe] using 2stage default for (256, 16384, 7168, 1024, 257, 9, 'ActivationType.Silu', 'torch.bfloat16', 'torch.bfloat16', 'torch.bfloat16', 'QuantType.No', True, False) 
+[aiter] run_1stage = False, ksplit = 0 q_type = QuantType.No block_m = 128 use_nt = False, estimated_m_per_expert = 573
+[aiter] [fused_moe] using 2stage default for (256, 16384, 7168, 1024, 257, 9, 'ActivationType.Silu', 'torch.bfloat16', 'torch.bfloat16', 'torch.bfloat16', 'QuantType.No', True, False) 
+[aiter] import [module_moe_ck2stages_b16_b16_preshuffle_on_b16_silu_no_mulWeightStage2_] under /projects/teamA/danish/repos/aiter/aiter/jit/module_moe_ck2stages_b16_b16_preshuffle_on_b16_silu_no_mulWeightStage2_.so
+[aiter] import [module_moe_ck2stages_b16_b16_preshuffle_on_b16_silu_no_mulWeightStage2_] under /projects/teamA/danish/repos/aiter/aiter/jit/module_moe_ck2stages_b16_b16_preshuffle_on_b16_silu_no_mulWeightStage2_.so
+[aiter] import [module_mla_metadata] under /projects/teamA/danish/repos/aiter/aiter/jit/module_mla_metadata.so
+[aiter] type hints mismatch, override to --> all_reduce(_fa: int, inp: aiter_tensor_t, out: aiter_tensor_t, use_new: bool, open_fp8_quant: bool, reg_inp_ptr: int, reg_inp_bytes: int) -> None
+[aiter] import [module_mla_metadata] under /projects/teamA/danish/repos/aiter/aiter/jit/module_mla_metadata.so
+[aiter] type hints mismatch, override to --> all_reduce(_fa: int, inp: aiter_tensor_t, out: aiter_tensor_t, use_new: bool, open_fp8_quant: bool, reg_inp_ptr: int, reg_inp_bytes: int) -> None
+[aiter] type hints mismatch, override to --> fused_allreduce_rmsnorm(_fa: int, inp: aiter_tensor_t, res_inp: aiter_tensor_t, res_out: aiter_tensor_t, out: aiter_tensor_t, w: aiter_tensor_t, eps: float, reg_ptr: int, reg_bytes: int, use_1stage: bool) -> None
+[aiter] hipModuleLoad: /projects/teamA/danish/repos/aiter/hsa//gfx950/bf16gemm/bf16gemm_fp32bf16_tn_48x64_splitk_clean.co GetFunction: _ZN5aiter39bf16gemm_fp32bf16_tn_48x64_splitk_cleanE
+[aiter] hipModuleGetFunction: _ZN5aiter39bf16gemm_fp32bf16_tn_48x64_splitk_cleanE Success
+[aiter] run_1stage = False, ksplit = 0 q_type = QuantType.No block_m = 32 use_nt = True, estimated_m_per_expert = 0
+[aiter] [fused_moe] using 2stage default for (256, 1, 7168, 1024, 257, 9, 'ActivationType.Silu', 'torch.bfloat16', 'torch.bfloat16', 'torch.bfloat16', 'QuantType.No', True, False) 
+[aiter] type hints mismatch, override to --> fused_allreduce_rmsnorm(_fa: int, inp: aiter_tensor_t, res_inp: aiter_tensor_t, res_out: aiter_tensor_t, out: aiter_tensor_t, w: aiter_tensor_t, eps: float, reg_ptr: int, reg_bytes: int, use_1stage: bool) -> None
+[aiter] hipModuleLoad: /projects/teamA/danish/repos/aiter/hsa//gfx950/bf16gemm/bf16gemm_fp32bf16_tn_48x64_splitk_clean.co GetFunction: _ZN5aiter39bf16gemm_fp32bf16_tn_48x64_splitk_cleanE
+[aiter] hipModuleGetFunction: _ZN5aiter39bf16gemm_fp32bf16_tn_48x64_splitk_cleanE Success
+[aiter] run_1stage = False, ksplit = 0 q_type = QuantType.No block_m = 32 use_nt = True, estimated_m_per_expert = 0
+[aiter] [fused_moe] using 2stage default for (256, 1, 7168, 1024, 257, 9, 'ActivationType.Silu', 'torch.bfloat16', 'torch.bfloat16', 'torch.bfloat16', 'QuantType.No', True, False) 
+[atom 04:41:22] Model Runner0/2: warmup_model 42.43 seconds with 1 reqs 10240 tokens
+[atom 04:41:22] Model warmup done: amd/DeepSeek-R1-0528-MXFP4
+[atom 04:41:22] Model Runner1/2: warmup_model 9.42 seconds with 1 reqs 10240 tokens
+[atom 04:41:22] Model warmup done: amd/DeepSeek-R1-0528-MXFP4
+[atom 04:41:22] Memory budget: total_gpu=287.98GB, free=92.04GB, utilization=0.9, budget=259.19GB, peak_torch=191.15GB, cudagraph_est=0.26GB, safety=5.76GB, available_for_kv=62.02GB, block_bytes=571392, num_kvcache_blocks=116548
+[atom 04:41:22] Memory budget: total_gpu=287.98GB, free=92.04GB, utilization=0.9, budget=259.19GB, peak_torch=191.15GB, cudagraph_est=0.26GB, safety=5.76GB, available_for_kv=62.02GB, block_bytes=571392, num_kvcache_blocks=116548
+[atom 04:41:22] Allocating KV cache for 61 target layers + 1 draft (MTP) layers = 62 total layers
+[atom 04:41:22] Allocating KV cache for 61 target layers + 1 draft (MTP) layers = 62 total layers
+[atom 04:41:22] Binding KV cache for target model starting at layer_id=0
+[atom 04:41:22] Binding KV cache for target model starting at layer_id=0
+[atom 04:41:22] Binding KV cache for draft model starting at layer_id=61
+[atom 04:41:22] Binding KV cache for draft model starting at layer_id=61
+/opt/venv/lib/python3.12/site-packages/torch/distributed/distributed_c10d.py:4876: UserWarning: barrier(): using the device under current context. You can specify `device_id` in `init_process_group` to mute this warning.
+  warnings.warn(  # warn only once
+[rank0]:[W414 04:41:22.587948591 ProcessGroupNCCL.cpp:5072] Guessing device ID based on global rank. This can cause a hang if rank to GPU mapping is heterogeneous. You can specify device_id in init_process_group()
+  0%|          | 0/10 [00:00<?, ?it/s]Capturing bs=256, max_q_len=4:   0%|          | 0/10 [00:00<?, ?it/s][aiter] shape is M:1024, N:2112, K:7168 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:1024, N:2112, K:7168 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:1024, N:12288, K:1536 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:1024, N:12288, K:1536 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] import [module_cache] under /projects/teamA/danish/repos/aiter/aiter/jit/module_cache.so
+[aiter] import [module_cache] under /projects/teamA/danish/repos/aiter/aiter/jit/module_cache.so
+[aiter] hipModuleLoad: /projects/teamA/danish/repos/aiter/hsa//gfx950/mla/mla_a8w8_qh16_qseqlen4_gqaratio16_v3_ps.co GetFunction: _ZN5aiter39mla_a8w8_qh16_qseqlen4_gqaratio16_v3_psE
+[aiter] hipModuleLoad: /projects/teamA/danish/repos/aiter/hsa//gfx950/mla/mla_a8w8_qh16_qseqlen4_gqaratio16_v3_ps.co GetFunction: _ZN5aiter39mla_a8w8_qh16_qseqlen4_gqaratio16_v3_psE
+[aiter] hipModuleGetFunction: _ZN5aiter39mla_a8w8_qh16_qseqlen4_gqaratio16_v3_psE Success
+[aiter] hipModuleGetFunction: _ZN5aiter39mla_a8w8_qh16_qseqlen4_gqaratio16_v3_psE Success
+[aiter] import [module_mla_reduce] under /projects/teamA/danish/repos/aiter/aiter/jit/module_mla_reduce.so
+[aiter] import [module_mla_reduce] under /projects/teamA/danish/repos/aiter/aiter/jit/module_mla_reduce.so
+[aiter] shape is M:1024, N:7168, K:8192 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:1024, N:7168, K:8192 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] hipModuleLoad: /projects/teamA/danish/repos/aiter/hsa//gfx950/f4gemm/f4gemm_bf16_per1x32Fp4_BpreShuffle_160x256.co GetFunction: _ZN5aiter42f4gemm_bf16_per1x32Fp4_BpreShuffle_160x256E
+[aiter] hipModuleLoad: /projects/teamA/danish/repos/aiter/hsa//gfx950/f4gemm/f4gemm_bf16_per1x32Fp4_BpreShuffle_160x256.co GetFunction: _ZN5aiter42f4gemm_bf16_per1x32Fp4_BpreShuffle_160x256E
+[aiter] hipModuleGetFunction: _ZN5aiter42f4gemm_bf16_per1x32Fp4_BpreShuffle_160x256E Success
+[aiter] hipModuleGetFunction: _ZN5aiter42f4gemm_bf16_per1x32Fp4_BpreShuffle_160x256E Success
+[aiter] shape is M:1024, N:7168, K:9216, not found tuned config in /tmp/aiter_configs/a4w4_blockscale_tuned_gemm.csv, will use default config!
+[aiter] shape is M:1024, N:7168, K:9216, not found tuned config in /tmp/aiter_configs/a4w4_blockscale_tuned_gemm.csv, will use default config!
+[aiter] hipModuleLoad: /projects/teamA/danish/repos/aiter/hsa//gfx950/f4gemm/f4gemm_bf16_per1x32Fp4_BpreShuffle_64x768.co GetFunction: _ZN5aiter41f4gemm_bf16_per1x32Fp4_BpreShuffle_64x768E
+[aiter] hipModuleLoad: /projects/teamA/danish/repos/aiter/hsa//gfx950/f4gemm/f4gemm_bf16_per1x32Fp4_BpreShuffle_64x768.co GetFunction: _ZN5aiter41f4gemm_bf16_per1x32Fp4_BpreShuffle_64x768E
+[aiter] hipModuleGetFunction: _ZN5aiter41f4gemm_bf16_per1x32Fp4_BpreShuffle_64x768E Success
+[aiter] hipModuleGetFunction: _ZN5aiter41f4gemm_bf16_per1x32Fp4_BpreShuffle_64x768E Success
+[aiter] shape is M:1024, N:256, K:7168 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:1024, N:256, K:7168 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] run_1stage = False, ksplit = 0 q_type = QuantType.per_1x32 block_m = 128 use_nt = True, estimated_m_per_expert = 35
+[aiter] run_1stage = False, ksplit = 0 q_type = QuantType.per_1x32 block_m = 128 use_nt = True, estimated_m_per_expert = 35
+[aiter] [fused_moe] using 2stage default for (256, 1024, 7168, 1024, 257, 9, 'ActivationType.Silu', 'torch.bfloat16', 'torch.float4_e2m1fn_x2', 'torch.float4_e2m1fn_x2', 'QuantType.per_1x32', True, False) 
+[aiter] [fused_moe] using 2stage default for (256, 1024, 7168, 1024, 257, 9, 'ActivationType.Silu', 'torch.bfloat16', 'torch.float4_e2m1fn_x2', 'torch.float4_e2m1fn_x2', 'QuantType.per_1x32', True, False) 
+Capturing bs=256, max_q_len=4:  10%|█         | 1/10 [00:00<00:01,  5.02it/s]Capturing bs=128, max_q_len=4:  10%|█         | 1/10 [00:00<00:01,  5.02it/s][aiter] shape is M:512, N:2112, K:7168 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:512, N:12288, K:1536 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:512, N:2112, K:7168 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:512, N:12288, K:1536 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:512, N:7168, K:8192 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] hipModuleLoad: /projects/teamA/danish/repos/aiter/hsa//gfx950/f4gemm/f4gemm_bf16_per1x32Fp4_BpreShuffle_192x256.co GetFunction: _ZN5aiter42f4gemm_bf16_per1x32Fp4_BpreShuffle_192x256E
+[aiter] shape is M:512, N:7168, K:8192 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] hipModuleLoad: /projects/teamA/danish/repos/aiter/hsa//gfx950/f4gemm/f4gemm_bf16_per1x32Fp4_BpreShuffle_192x256.co GetFunction: _ZN5aiter42f4gemm_bf16_per1x32Fp4_BpreShuffle_192x256E
+[aiter] hipModuleGetFunction: _ZN5aiter42f4gemm_bf16_per1x32Fp4_BpreShuffle_192x256E Success
+[aiter] hipModuleGetFunction: _ZN5aiter42f4gemm_bf16_per1x32Fp4_BpreShuffle_192x256E Success
+[aiter] shape is M:512, N:7168, K:9216, not found tuned config in /tmp/aiter_configs/a4w4_blockscale_tuned_gemm.csv, will use default config!
+[aiter] shape is M:512, N:7168, K:9216, not found tuned config in /tmp/aiter_configs/a4w4_blockscale_tuned_gemm.csv, will use default config!
+[aiter] hipModuleLoad: /projects/teamA/danish/repos/aiter/hsa//gfx950/f4gemm/f4gemm_bf16_per1x32Fp4_BpreShuffle_192x128.co GetFunction: _ZN5aiter42f4gemm_bf16_per1x32Fp4_BpreShuffle_192x128E
+[aiter] hipModuleLoad: /projects/teamA/danish/repos/aiter/hsa//gfx950/f4gemm/f4gemm_bf16_per1x32Fp4_BpreShuffle_192x128.co GetFunction: _ZN5aiter42f4gemm_bf16_per1x32Fp4_BpreShuffle_192x128E
+[aiter] hipModuleGetFunction: _ZN5aiter42f4gemm_bf16_per1x32Fp4_BpreShuffle_192x128E Success
+[aiter] hipModuleGetFunction: _ZN5aiter42f4gemm_bf16_per1x32Fp4_BpreShuffle_192x128E Success
+[aiter] shape is M:512, N:256, K:7168 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:512, N:256, K:7168 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] run_1stage = False, ksplit = 0 q_type = QuantType.per_1x32 block_m = 128 use_nt = True, estimated_m_per_expert = 17
+[aiter] run_1stage = False, ksplit = 0 q_type = QuantType.per_1x32 block_m = 128 use_nt = True, estimated_m_per_expert = 17
+[aiter] [fused_moe] using 2stage default for (256, 512, 7168, 1024, 257, 9, 'ActivationType.Silu', 'torch.bfloat16', 'torch.float4_e2m1fn_x2', 'torch.float4_e2m1fn_x2', 'QuantType.per_1x32', True, False) 
+[aiter] [fused_moe] using 2stage default for (256, 512, 7168, 1024, 257, 9, 'ActivationType.Silu', 'torch.bfloat16', 'torch.float4_e2m1fn_x2', 'torch.float4_e2m1fn_x2', 'QuantType.per_1x32', True, False) 
+Capturing bs=128, max_q_len=4:  20%|██        | 2/10 [00:00<00:01,  6.88it/s]Capturing bs=64, max_q_len=4:  20%|██        | 2/10 [00:00<00:01,  6.88it/s] [aiter] hipModuleLoad: /projects/teamA/danish/repos/aiter/hsa//gfx950/bf16gemm/bf16gemm_fp32bf16_tn_96x64_splitk_clean.co GetFunction: _ZN5aiter39bf16gemm_fp32bf16_tn_96x64_splitk_cleanE
+[aiter] hipModuleGetFunction: _ZN5aiter39bf16gemm_fp32bf16_tn_96x64_splitk_cleanE Success
+[aiter] hipModuleLoad: /projects/teamA/danish/repos/aiter/hsa//gfx950/bf16gemm/bf16gemm_fp32bf16_tn_96x64_splitk_clean.co GetFunction: _ZN5aiter39bf16gemm_fp32bf16_tn_96x64_splitk_cleanE
+[aiter] shape is M:256, N:12288, K:1536 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:256, N:7168, K:8192 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] hipModuleLoad: /projects/teamA/danish/repos/aiter/hsa//gfx950/f4gemm/f4gemm_bf16_per1x32Fp4_BpreShuffle_96x256.co GetFunction: _ZN5aiter41f4gemm_bf16_per1x32Fp4_BpreShuffle_96x256E
+[aiter] hipModuleGetFunction: _ZN5aiter41f4gemm_bf16_per1x32Fp4_BpreShuffle_96x256E Success
+[aiter] shape is M:256, N:7168, K:9216, not found tuned config in /tmp/aiter_configs/a4w4_blockscale_tuned_gemm.csv, will use default config!
+[aiter] run_1stage = False, ksplit = 0 q_type = QuantType.per_1x32 block_m = 128 use_nt = True, estimated_m_per_expert = 8
+[aiter] [fused_moe] using 2stage default for (256, 256, 7168, 1024, 257, 9, 'ActivationType.Silu', 'torch.bfloat16', 'torch.float4_e2m1fn_x2', 'torch.float4_e2m1fn_x2', 'QuantType.per_1x32', True, False) 
+[aiter] hipModuleGetFunction: _ZN5aiter39bf16gemm_fp32bf16_tn_96x64_splitk_cleanE Success
+[aiter] shape is M:256, N:12288, K:1536 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:256, N:7168, K:8192 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] hipModuleLoad: /projects/teamA/danish/repos/aiter/hsa//gfx950/f4gemm/f4gemm_bf16_per1x32Fp4_BpreShuffle_96x256.co GetFunction: _ZN5aiter41f4gemm_bf16_per1x32Fp4_BpreShuffle_96x256E
+[aiter] hipModuleGetFunction: _ZN5aiter41f4gemm_bf16_per1x32Fp4_BpreShuffle_96x256E Success
+[aiter] shape is M:256, N:7168, K:9216, not found tuned config in /tmp/aiter_configs/a4w4_blockscale_tuned_gemm.csv, will use default config!
+[aiter] run_1stage = False, ksplit = 0 q_type = QuantType.per_1x32 block_m = 128 use_nt = True, estimated_m_per_expert = 8
+[aiter] [fused_moe] using 2stage default for (256, 256, 7168, 1024, 257, 9, 'ActivationType.Silu', 'torch.bfloat16', 'torch.float4_e2m1fn_x2', 'torch.float4_e2m1fn_x2', 'QuantType.per_1x32', True, False) 
+Capturing bs=64, max_q_len=4:  30%|███       | 3/10 [00:00<00:00,  7.50it/s]Capturing bs=48, max_q_len=4:  30%|███       | 3/10 [00:00<00:00,  7.50it/s][aiter] shape is M:192, N:12288, K:1536 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:192, N:7168, K:8192 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:192, N:7168, K:9216, not found tuned config in /tmp/aiter_configs/a4w4_blockscale_tuned_gemm.csv, will use default config!
+[aiter] shape is M:192, N:12288, K:1536 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:192, N:7168, K:8192 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:192, N:7168, K:9216, not found tuned config in /tmp/aiter_configs/a4w4_blockscale_tuned_gemm.csv, will use default config!
+Capturing bs=48, max_q_len=4:  40%|████      | 4/10 [00:00<00:00,  7.90it/s]Capturing bs=32, max_q_len=4:  40%|████      | 4/10 [00:00<00:00,  7.90it/s][aiter] hipModuleLoad: /projects/teamA/danish/repos/aiter/hsa//gfx950/bf16gemm/bf16gemm_fp32bf16_tn_64x64_splitk_clean.co GetFunction: _ZN5aiter39bf16gemm_fp32bf16_tn_64x64_splitk_cleanE
+[aiter] hipModuleGetFunction: _ZN5aiter39bf16gemm_fp32bf16_tn_64x64_splitk_cleanE Success
+[aiter] shape is M:128, N:12288, K:1536 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:128, N:7168, K:8192 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] hipModuleLoad: /projects/teamA/danish/repos/aiter/hsa//gfx950/f4gemm/f4gemm_bf16_per1x32Fp4_BpreShuffle_128x128.co GetFunction: _ZN5aiter42f4gemm_bf16_per1x32Fp4_BpreShuffle_128x128E
+[aiter] hipModuleGetFunction: _ZN5aiter42f4gemm_bf16_per1x32Fp4_BpreShuffle_128x128E Success
+[aiter] shape is M:128, N:7168, K:9216, not found tuned config in /tmp/aiter_configs/a4w4_blockscale_tuned_gemm.csv, will use default config!
+[aiter] run_1stage = False, ksplit = 0 q_type = QuantType.per_1x32 block_m = 64 use_nt = True, estimated_m_per_expert = 4
+[aiter] [fused_moe] using 2stage default for (256, 128, 7168, 1024, 257, 9, 'ActivationType.Silu', 'torch.bfloat16', 'torch.float4_e2m1fn_x2', 'torch.float4_e2m1fn_x2', 'QuantType.per_1x32', True, False) 
+[aiter] hipModuleLoad: /projects/teamA/danish/repos/aiter/hsa//gfx950/bf16gemm/bf16gemm_fp32bf16_tn_64x64_splitk_clean.co GetFunction: _ZN5aiter39bf16gemm_fp32bf16_tn_64x64_splitk_cleanE
+[aiter] hipModuleGetFunction: _ZN5aiter39bf16gemm_fp32bf16_tn_64x64_splitk_cleanE Success
+[aiter] shape is M:128, N:12288, K:1536 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:128, N:7168, K:8192 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] hipModuleLoad: /projects/teamA/danish/repos/aiter/hsa//gfx950/f4gemm/f4gemm_bf16_per1x32Fp4_BpreShuffle_128x128.co GetFunction: _ZN5aiter42f4gemm_bf16_per1x32Fp4_BpreShuffle_128x128E
+[aiter] hipModuleGetFunction: _ZN5aiter42f4gemm_bf16_per1x32Fp4_BpreShuffle_128x128E Success
+[aiter] shape is M:128, N:7168, K:9216, not found tuned config in /tmp/aiter_configs/a4w4_blockscale_tuned_gemm.csv, will use default config!
+[aiter] run_1stage = False, ksplit = 0 q_type = QuantType.per_1x32 block_m = 64 use_nt = True, estimated_m_per_expert = 4
+[aiter] [fused_moe] using 2stage default for (256, 128, 7168, 1024, 257, 9, 'ActivationType.Silu', 'torch.bfloat16', 'torch.float4_e2m1fn_x2', 'torch.float4_e2m1fn_x2', 'QuantType.per_1x32', True, False) 
+Capturing bs=32, max_q_len=4:  50%|█████     | 5/10 [00:00<00:00,  8.06it/s]Capturing bs=16, max_q_len=4:  50%|█████     | 5/10 [00:00<00:00,  8.06it/s][aiter] shape is M:64, N:12288, K:1536 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:64, N:7168, K:8192 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] hipModuleLoad: /projects/teamA/danish/repos/aiter/hsa//gfx950/f4gemm/f4gemm_bf16_per1x32Fp4_BpreShuffle_64x128.co GetFunction: _ZN5aiter41f4gemm_bf16_per1x32Fp4_BpreShuffle_64x128E
+[aiter] hipModuleGetFunction: _ZN5aiter41f4gemm_bf16_per1x32Fp4_BpreShuffle_64x128E Success
+[aiter] shape is M:64, N:7168, K:9216, not found tuned config in /tmp/aiter_configs/a4w4_blockscale_tuned_gemm.csv, will use default config!
+[aiter] run_1stage = False, ksplit = 0 q_type = QuantType.per_1x32 block_m = 32 use_nt = True, estimated_m_per_expert = 2
+[aiter] [fused_moe] using 2stage default for (256, 64, 7168, 1024, 257, 9, 'ActivationType.Silu', 'torch.bfloat16', 'torch.float4_e2m1fn_x2', 'torch.float4_e2m1fn_x2', 'QuantType.per_1x32', True, False) 
+[aiter] shape is M:64, N:12288, K:1536 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:64, N:7168, K:8192 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] hipModuleLoad: /projects/teamA/danish/repos/aiter/hsa//gfx950/f4gemm/f4gemm_bf16_per1x32Fp4_BpreShuffle_64x128.co GetFunction: _ZN5aiter41f4gemm_bf16_per1x32Fp4_BpreShuffle_64x128E
+[aiter] hipModuleGetFunction: _ZN5aiter41f4gemm_bf16_per1x32Fp4_BpreShuffle_64x128E Success
+[aiter] shape is M:64, N:7168, K:9216, not found tuned config in /tmp/aiter_configs/a4w4_blockscale_tuned_gemm.csv, will use default config!
+[aiter] run_1stage = False, ksplit = 0 q_type = QuantType.per_1x32 block_m = 32 use_nt = True, estimated_m_per_expert = 2
+[aiter] [fused_moe] using 2stage default for (256, 64, 7168, 1024, 257, 9, 'ActivationType.Silu', 'torch.bfloat16', 'torch.float4_e2m1fn_x2', 'torch.float4_e2m1fn_x2', 'QuantType.per_1x32', True, False) 
+Capturing bs=16, max_q_len=4:  60%|██████    | 6/10 [00:00<00:00,  8.08it/s]Capturing bs=8, max_q_len=4:  60%|██████    | 6/10 [00:00<00:00,  8.08it/s] [aiter] shape is M:32, N:12288, K:1536 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:32, N:7168, K:8192 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] hipModuleLoad: /projects/teamA/danish/repos/aiter/hsa//gfx950/f4gemm/f4gemm_bf16_per1x32Fp4_BpreShuffle_32x128.co GetFunction: _ZN5aiter41f4gemm_bf16_per1x32Fp4_BpreShuffle_32x128E
+[aiter] hipModuleGetFunction: _ZN5aiter41f4gemm_bf16_per1x32Fp4_BpreShuffle_32x128E Success
+[aiter] shape is M:32, N:7168, K:9216, not found tuned config in /tmp/aiter_configs/a4w4_blockscale_tuned_gemm.csv, will use default config!
+[aiter] run_1stage = False, ksplit = 0 q_type = QuantType.per_1x32 block_m = 32 use_nt = True, estimated_m_per_expert = 1
+[aiter] [fused_moe] using 2stage default for (256, 32, 7168, 1024, 257, 9, 'ActivationType.Silu', 'torch.bfloat16', 'torch.float4_e2m1fn_x2', 'torch.float4_e2m1fn_x2', 'QuantType.per_1x32', True, False) 
+[aiter] shape is M:32, N:12288, K:1536 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:32, N:7168, K:8192 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] hipModuleLoad: /projects/teamA/danish/repos/aiter/hsa//gfx950/f4gemm/f4gemm_bf16_per1x32Fp4_BpreShuffle_32x128.co GetFunction: _ZN5aiter41f4gemm_bf16_per1x32Fp4_BpreShuffle_32x128E
+[aiter] hipModuleGetFunction: _ZN5aiter41f4gemm_bf16_per1x32Fp4_BpreShuffle_32x128E Success
+[aiter] shape is M:32, N:7168, K:9216, not found tuned config in /tmp/aiter_configs/a4w4_blockscale_tuned_gemm.csv, will use default config!
+[aiter] run_1stage = False, ksplit = 0 q_type = QuantType.per_1x32 block_m = 32 use_nt = True, estimated_m_per_expert = 1
+[aiter] [fused_moe] using 2stage default for (256, 32, 7168, 1024, 257, 9, 'ActivationType.Silu', 'torch.bfloat16', 'torch.float4_e2m1fn_x2', 'torch.float4_e2m1fn_x2', 'QuantType.per_1x32', True, False) 
+Capturing bs=8, max_q_len=4:  70%|███████   | 7/10 [00:00<00:00,  7.02it/s]Capturing bs=4, max_q_len=4:  70%|███████   | 7/10 [00:00<00:00,  7.02it/s][aiter] shape is M:16, N:12288, K:1536 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:16, N:7168, K:8192 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:16, N:7168, K:9216, not found tuned config in /tmp/aiter_configs/a4w4_blockscale_tuned_gemm.csv, will use default config!
+[aiter] hipModuleLoad: /projects/teamA/danish/repos/aiter/hsa//gfx950/bf16gemm/bf16gemm_fp32bf16_tn_80x64_splitk_clean.co GetFunction: _ZN5aiter39bf16gemm_fp32bf16_tn_80x64_splitk_cleanE
+[aiter] hipModuleGetFunction: _ZN5aiter39bf16gemm_fp32bf16_tn_80x64_splitk_cleanE Success
+[aiter] run_1stage = False, ksplit = 0 q_type = QuantType.per_1x32 block_m = 32 use_nt = True, estimated_m_per_expert = 0
+[aiter] [fused_moe] using 2stage default for (256, 16, 7168, 1024, 257, 9, 'ActivationType.Silu', 'torch.bfloat16', 'torch.float4_e2m1fn_x2', 'torch.float4_e2m1fn_x2', 'QuantType.per_1x32', True, False) 
+[aiter] shape is M:16, N:12288, K:1536 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:16, N:7168, K:8192 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:16, N:7168, K:9216, not found tuned config in /tmp/aiter_configs/a4w4_blockscale_tuned_gemm.csv, will use default config!
+[aiter] hipModuleLoad: /projects/teamA/danish/repos/aiter/hsa//gfx950/bf16gemm/bf16gemm_fp32bf16_tn_80x64_splitk_clean.co GetFunction: _ZN5aiter39bf16gemm_fp32bf16_tn_80x64_splitk_cleanE
+[aiter] hipModuleGetFunction: _ZN5aiter39bf16gemm_fp32bf16_tn_80x64_splitk_cleanE Success
+[aiter] run_1stage = False, ksplit = 0 q_type = QuantType.per_1x32 block_m = 32 use_nt = True, estimated_m_per_expert = 0
+[aiter] [fused_moe] using 2stage default for (256, 16, 7168, 1024, 257, 9, 'ActivationType.Silu', 'torch.bfloat16', 'torch.float4_e2m1fn_x2', 'torch.float4_e2m1fn_x2', 'QuantType.per_1x32', True, False) 
+Capturing bs=4, max_q_len=4:  80%|████████  | 8/10 [00:01<00:00,  7.15it/s]Capturing bs=2, max_q_len=4:  80%|████████  | 8/10 [00:01<00:00,  7.15it/s][aiter] shape is M:8, N:12288, K:1536 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:8, N:7168, K:8192 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:8, N:7168, K:9216, not found tuned config in /tmp/aiter_configs/a4w4_blockscale_tuned_gemm.csv, will use default config!
+[aiter] hipModuleLoad: /projects/teamA/danish/repos/aiter/hsa//gfx950/bf16gemm/bf16gemm_fp32bf16_tn_32x64_splitk_clean.co GetFunction: _ZN5aiter39bf16gemm_fp32bf16_tn_32x64_splitk_cleanE
+[aiter] hipModuleGetFunction: _ZN5aiter39bf16gemm_fp32bf16_tn_32x64_splitk_cleanE Success
+[aiter] run_1stage = False, ksplit = 0 q_type = QuantType.per_1x32 block_m = 32 use_nt = True, estimated_m_per_expert = 0
+[aiter] [fused_moe] using 2stage default for (256, 8, 7168, 1024, 257, 9, 'ActivationType.Silu', 'torch.bfloat16', 'torch.float4_e2m1fn_x2', 'torch.float4_e2m1fn_x2', 'QuantType.per_1x32', True, False) 
+[aiter] shape is M:8, N:12288, K:1536 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:8, N:7168, K:8192 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:8, N:7168, K:9216, not found tuned config in /tmp/aiter_configs/a4w4_blockscale_tuned_gemm.csv, will use default config!
+[aiter] hipModuleLoad: /projects/teamA/danish/repos/aiter/hsa//gfx950/bf16gemm/bf16gemm_fp32bf16_tn_32x64_splitk_clean.co GetFunction: _ZN5aiter39bf16gemm_fp32bf16_tn_32x64_splitk_cleanE
+[aiter] hipModuleGetFunction: _ZN5aiter39bf16gemm_fp32bf16_tn_32x64_splitk_cleanE Success
+[aiter] run_1stage = False, ksplit = 0 q_type = QuantType.per_1x32 block_m = 32 use_nt = True, estimated_m_per_expert = 0
+[aiter] [fused_moe] using 2stage default for (256, 8, 7168, 1024, 257, 9, 'ActivationType.Silu', 'torch.bfloat16', 'torch.float4_e2m1fn_x2', 'torch.float4_e2m1fn_x2', 'QuantType.per_1x32', True, False) 
+Capturing bs=2, max_q_len=4:  90%|█████████ | 9/10 [00:01<00:00,  7.22it/s]Capturing bs=1, max_q_len=4:  90%|█████████ | 9/10 [00:01<00:00,  7.22it/s][aiter] shape is M:4, N:12288, K:1536 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:4, N:7168, K:8192 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:4, N:7168, K:9216, not found tuned config in /tmp/aiter_configs/a4w4_blockscale_tuned_gemm.csv, will use default config!
+[aiter] run_1stage = False, ksplit = 0 q_type = QuantType.per_1x32 block_m = 32 use_nt = True, estimated_m_per_expert = 0
+[aiter] [fused_moe] using 2stage default for (256, 4, 7168, 1024, 257, 9, 'ActivationType.Silu', 'torch.bfloat16', 'torch.float4_e2m1fn_x2', 'torch.float4_e2m1fn_x2', 'QuantType.per_1x32', True, False) 
+[aiter] shape is M:4, N:12288, K:1536 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:4, N:7168, K:8192 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:4, N:7168, K:9216, not found tuned config in /tmp/aiter_configs/a4w4_blockscale_tuned_gemm.csv, will use default config!
+[aiter] run_1stage = False, ksplit = 0 q_type = QuantType.per_1x32 block_m = 32 use_nt = True, estimated_m_per_expert = 0
+[aiter] [fused_moe] using 2stage default for (256, 4, 7168, 1024, 257, 9, 'ActivationType.Silu', 'torch.bfloat16', 'torch.float4_e2m1fn_x2', 'torch.float4_e2m1fn_x2', 'QuantType.per_1x32', True, False) 
+Capturing bs=1, max_q_len=4: 100%|██████████| 10/10 [00:01<00:00,  7.33it/s]Capturing bs=1, max_q_len=4: 100%|██████████| 10/10 [00:01<00:00,  7.31it/s]
+[aiter] Registering 1230 cuda graph addresses
+[aiter] Registering 1230 cuda graph addresses
+[atom 04:41:24] Post-init memory: actual=260.08GB (90.3%), target=259.19GB (90%)
+[atom 04:41:24] Post-init memory: actual=260.08GB (90.3%), target=259.19GB (90%)
+[atom 04:41:24] Engine Core: cudagraph capture[1, 2, 4, 8, 16, 32, 48, 64, 128, 256] cost: 1.39 seconds
+[atom 04:41:24] Engine Core: load model runner success
+[atom 04:41:24] Engine Core: EngineCore fully initialized and ready
+[atom 04:41:24] Engine Core Mgr: DP rank 0 is fully initialized and ready
+[atom 04:41:24] Engine Core Mgr: All EngineCores are fully initialized and ready
+[atom 04:41:24] Engine Core Mgr: All 1 EngineCores initialized and ready
+[atom 04:41:24] LLMEngine init with 1 data parallel ranks
+[atom 04:41:24] Starting server on 0.0.0.0:8888...
+INFO:     Started server process [1191526]
+INFO:     Waiting for application startup.
+[atom 04:41:24] Server started successfully and ready to accept requests
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8888 (Press CTRL+C to quit)
+[aiter] No available shared memory broadcast block found in 60.0 seconds. This typically happens when some processes are hanging or doing some time-consuming work (e.g. compilation).
+[aiter] No available shared memory broadcast block found in 60.0 seconds. This typically happens when some processes are hanging or doing some time-consuming work (e.g. compilation).
+[aiter] No available shared memory broadcast block found in 60.0 seconds. This typically happens when some processes are hanging or doing some time-consuming work (e.g. compilation).
+[aiter] No available shared memory broadcast block found in 60.0 seconds. This typically happens when some processes are hanging or doing some time-consuming work (e.g. compilation).
+[aiter] No available shared memory broadcast block found in 60.0 seconds. This typically happens when some processes are hanging or doing some time-consuming work (e.g. compilation).
+[aiter] No available shared memory broadcast block found in 60.0 seconds. This typically happens when some processes are hanging or doing some time-consuming work (e.g. compilation).
+[aiter] No available shared memory broadcast block found in 60.0 seconds. This typically happens when some processes are hanging or doing some time-consuming work (e.g. compilation).
+[aiter] No available shared memory broadcast block found in 60.0 seconds. This typically happens when some processes are hanging or doing some time-consuming work (e.g. compilation).
+[aiter] No available shared memory broadcast block found in 60.0 seconds. This typically happens when some processes are hanging or doing some time-consuming work (e.g. compilation).
+[aiter] No available shared memory broadcast block found in 60.0 seconds. This typically happens when some processes are hanging or doing some time-consuming work (e.g. compilation).
+[aiter] No available shared memory broadcast block found in 60.0 seconds. This typically happens when some processes are hanging or doing some time-consuming work (e.g. compilation).
+[aiter] No available shared memory broadcast block found in 60.0 seconds. This typically happens when some processes are hanging or doing some time-consuming work (e.g. compilation).
+[aiter] No available shared memory broadcast block found in 60.0 seconds. This typically happens when some processes are hanging or doing some time-consuming work (e.g. compilation).
+[aiter] No available shared memory broadcast block found in 60.0 seconds. This typically happens when some processes are hanging or doing some time-consuming work (e.g. compilation).
+INFO:     127.0.0.1:37200 - "GET /health HTTP/1.1" 200 OK
+[atom 04:49:20] Request 0 arrived, input tokens: 5, pending requests: 1 
+[atom 04:49:20] Engine Core: put 1 reqs to scheduler
+[atom 04:49:20] Scheduled prefill batch: 1 reqs, 5 token_nums: [5], req_ids: (0,)
+[aiter] shape is M:5, N:12288, K:1536 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:5, N:12288, K:1536 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] import [module_rope_2c_cached_positions_fwd] under /projects/teamA/danish/repos/aiter/aiter/jit/module_rope_2c_cached_positions_fwd.so
+[aiter] import [module_rope_2c_cached_positions_fwd] under /projects/teamA/danish/repos/aiter/aiter/jit/module_rope_2c_cached_positions_fwd.so
+[aiter] shape is M:5, N:16384, K:512 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:5, N:16384, K:512 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] import [module_fmha_v3_varlen_fwd] under /projects/teamA/danish/repos/aiter/aiter/jit/module_fmha_v3_varlen_fwd.so
+[aiter] import [module_fmha_v3_varlen_fwd] under /projects/teamA/danish/repos/aiter/aiter/jit/module_fmha_v3_varlen_fwd.so
+[aiter] type hints mismatch, override to --> fmha_v3_varlen_fwd(q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, cu_seqlens_q: torch.Tensor, cu_seqlens_k: torch.Tensor, max_seqlen_q: int, max_seqlen_k: int, min_seqlen_q: int, dropout_p: float, softmax_scale: float, logits_soft_cap: float, zero_tensors: bool, is_causal: bool, window_size_left: int, window_size_right: int, return_softmax_lse: bool, return_dropout_randval: bool, how_v3_bf16_cvt: int, out: Optional[torch.Tensor] = None, block_table: Optional[torch.Tensor] = None, bias: Optional[torch.Tensor] = None, alibi_slopes: Optional[torch.Tensor] = None, q_descale: Optional[torch.Tensor] = None, k_descale: Optional[torch.Tensor] = None, v_descale: Optional[torch.Tensor] = None, gen: Optional[torch.Generator] = None, cu_seqlens_q_padded: Optional[torch.Tensor] = None, cu_seqlens_k_padded: Optional[torch.Tensor] = None) -> List[torch.Tensor]
+[aiter] hipModuleLoad: /projects/teamA/danish/repos/aiter/hsa//gfx950/fmha_v3_fwd/fwd_hd192_hd128_bf16_causal_group.co GetFunction: _ZN5aiter38fmha_fwd_hd192_hd128_bf16_causal_groupE
+[aiter] type hints mismatch, override to --> fmha_v3_varlen_fwd(q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, cu_seqlens_q: torch.Tensor, cu_seqlens_k: torch.Tensor, max_seqlen_q: int, max_seqlen_k: int, min_seqlen_q: int, dropout_p: float, softmax_scale: float, logits_soft_cap: float, zero_tensors: bool, is_causal: bool, window_size_left: int, window_size_right: int, return_softmax_lse: bool, return_dropout_randval: bool, how_v3_bf16_cvt: int, out: Optional[torch.Tensor] = None, block_table: Optional[torch.Tensor] = None, bias: Optional[torch.Tensor] = None, alibi_slopes: Optional[torch.Tensor] = None, q_descale: Optional[torch.Tensor] = None, k_descale: Optional[torch.Tensor] = None, v_descale: Optional[torch.Tensor] = None, gen: Optional[torch.Generator] = None, cu_seqlens_q_padded: Optional[torch.Tensor] = None, cu_seqlens_k_padded: Optional[torch.Tensor] = None) -> List[torch.Tensor]
+[aiter] hipModuleLoad: /projects/teamA/danish/repos/aiter/hsa//gfx950/fmha_v3_fwd/fwd_hd192_hd128_bf16_causal_group.co GetFunction: _ZN5aiter38fmha_fwd_hd192_hd128_bf16_causal_groupE
+[aiter] hipModuleGetFunction: _ZN5aiter38fmha_fwd_hd192_hd128_bf16_causal_groupE Success
+[aiter] hipModuleGetFunction: _ZN5aiter38fmha_fwd_hd192_hd128_bf16_causal_groupE Success
+[aiter] shape is M:5, N:7168, K:8192 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:5, N:7168, K:8192 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:5, N:7168, K:9216, not found tuned config in /tmp/aiter_configs/a4w4_blockscale_tuned_gemm.csv, will use default config!
+[aiter] shape is M:5, N:7168, K:9216, not found tuned config in /tmp/aiter_configs/a4w4_blockscale_tuned_gemm.csv, will use default config!
+[aiter] run_1stage = False, ksplit = 0 q_type = QuantType.No block_m = 32 use_nt = True, estimated_m_per_expert = 0
+[aiter] [fused_moe] using 2stage default for (256, 8, 7168, 1024, 257, 9, 'ActivationType.Silu', 'torch.bfloat16', 'torch.bfloat16', 'torch.bfloat16', 'QuantType.No', True, False) 
+[aiter] run_1stage = False, ksplit = 0 q_type = QuantType.No block_m = 32 use_nt = True, estimated_m_per_expert = 0
+[aiter] [fused_moe] using 2stage default for (256, 8, 7168, 1024, 257, 9, 'ActivationType.Silu', 'torch.bfloat16', 'torch.bfloat16', 'torch.bfloat16', 'QuantType.No', True, False) 
+[aiter] shape is M:1, N:12288, K:1536 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:1, N:12288, K:1536 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] hipModuleLoad: /projects/teamA/danish/repos/aiter/hsa//gfx950/mla/mla_a8w8_qh64_qseqlen1_gqaratio64_v3_ps.co GetFunction: _ZN5aiter39mla_a8w8_qh64_qseqlen1_gqaratio64_v3_psE
+[aiter] hipModuleLoad: /projects/teamA/danish/repos/aiter/hsa//gfx950/mla/mla_a8w8_qh64_qseqlen1_gqaratio64_v3_ps.co GetFunction: _ZN5aiter39mla_a8w8_qh64_qseqlen1_gqaratio64_v3_psE
+[aiter] hipModuleGetFunction: _ZN5aiter39mla_a8w8_qh64_qseqlen1_gqaratio64_v3_psE Success
+[aiter] hipModuleGetFunction: _ZN5aiter39mla_a8w8_qh64_qseqlen1_gqaratio64_v3_psE Success
+[aiter] shape is M:1, N:7168, K:8192 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:1, N:7168, K:8192 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:4, N:64640, K:7168 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:4, N:64640, K:7168 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] run_1stage = False, ksplit = 0 q_type = QuantType.No block_m = 32 use_nt = True, estimated_m_per_expert = 0
+[aiter] [fused_moe] using 2stage default for (256, 4, 7168, 1024, 257, 9, 'ActivationType.Silu', 'torch.bfloat16', 'torch.bfloat16', 'torch.bfloat16', 'QuantType.No', True, False) 
+[aiter] run_1stage = False, ksplit = 0 q_type = QuantType.No block_m = 32 use_nt = True, estimated_m_per_expert = 0
+[aiter] [fused_moe] using 2stage default for (256, 4, 7168, 1024, 257, 9, 'ActivationType.Silu', 'torch.bfloat16', 'torch.bfloat16', 'torch.bfloat16', 'QuantType.No', True, False) 
+INFO:     127.0.0.1:37212 - "POST /v1/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37226 - "GET /v1/models HTTP/1.1" 200 OK
+[atom 04:49:20] Engine Core: output send 1 reqs
+INFO:     127.0.0.1:59420 - "GET /tokenizer_info HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:59420 - "GET /tokenizer_info HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:59420 - "GET /tokenizer_info HTTP/1.1" 404 Not Found
+[atom 04:49:26] Request 1 arrived, input tokens: 906, pending requests: 2 
+[atom 04:49:26] Request 2 arrived, input tokens: 871, pending requests: 3 
+[atom 04:49:26] Request 3 arrived, input tokens: 895, pending requests: 4 
+[atom 04:49:26] Request 4 arrived, input tokens: 864, pending requests: 5 
+[atom 04:49:26] Request 5 arrived, input tokens: 856, pending requests: 6 
+[atom 04:49:26] Request 6 arrived, input tokens: 846, pending requests: 7 
+[atom 04:49:26] Request 7 arrived, input tokens: 923, pending requests: 8 
+[atom 04:49:26] Request 8 arrived, input tokens: 791, pending requests: 9 
+[atom 04:49:26] Request 9 arrived, input tokens: 860, pending requests: 10 
+[atom 04:49:26] Request 10 arrived, input tokens: 857, pending requests: 11 
+[atom 04:49:26] Request 11 arrived, input tokens: 832, pending requests: 12 
+[atom 04:49:26] Request 12 arrived, input tokens: 783, pending requests: 13 
+[atom 04:49:26] Request 13 arrived, input tokens: 814, pending requests: 14 
+[atom 04:49:26] Request 14 arrived, input tokens: 745, pending requests: 15 
+[atom 04:49:26] Request 15 arrived, input tokens: 827, pending requests: 16 
+[atom 04:49:26] Request 16 arrived, input tokens: 838, pending requests: 17 
+[atom 04:49:26] Request 17 arrived, input tokens: 823, pending requests: 18 
+[atom 04:49:26] Request 18 arrived, input tokens: 773, pending requests: 19 
+[atom 04:49:26] Request 19 arrived, input tokens: 829, pending requests: 20 
+[atom 04:49:26] Request 20 arrived, input tokens: 738, pending requests: 21 
+[atom 04:49:26] Request 21 arrived, input tokens: 787, pending requests: 22 
+[atom 04:49:26] Request 22 arrived, input tokens: 799, pending requests: 23 
+[atom 04:49:26] Request 23 arrived, input tokens: 744, pending requests: 24 
+[atom 04:49:26] Request 24 arrived, input tokens: 741, pending requests: 25 
+[atom 04:49:26] Request 25 arrived, input tokens: 733, pending requests: 26 
+[atom 04:49:26] Request 26 arrived, input tokens: 797, pending requests: 27 
+[atom 04:49:26] Request 27 arrived, input tokens: 793, pending requests: 28 
+[atom 04:49:26] Request 28 arrived, input tokens: 803, pending requests: 29 
+[atom 04:49:26] Request 29 arrived, input tokens: 735, pending requests: 30 
+[atom 04:49:26] Request 30 arrived, input tokens: 798, pending requests: 31 
+[atom 04:49:26] Request 31 arrived, input tokens: 745, pending requests: 32 
+[atom 04:49:26] Request 32 arrived, input tokens: 848, pending requests: 33 
+[atom 04:49:26] Request 33 arrived, input tokens: 835, pending requests: 34 
+[atom 04:49:26] Request 34 arrived, input tokens: 770, pending requests: 35 
+[atom 04:49:26] Request 35 arrived, input tokens: 738, pending requests: 36 
+[atom 04:49:26] Request 36 arrived, input tokens: 751, pending requests: 37 
+[atom 04:49:26] Request 37 arrived, input tokens: 747, pending requests: 38 
+[atom 04:49:26] Request 38 arrived, input tokens: 698, pending requests: 39 
+[atom 04:49:26] Request 39 arrived, input tokens: 835, pending requests: 40 
+[atom 04:49:26] Request 40 arrived, input tokens: 736, pending requests: 41 
+[atom 04:49:26] Request 41 arrived, input tokens: 734, pending requests: 42 
+[atom 04:49:26] Request 42 arrived, input tokens: 752, pending requests: 43 
+[atom 04:49:26] Request 43 arrived, input tokens: 759, pending requests: 44 
+[atom 04:49:26] Request 44 arrived, input tokens: 714, pending requests: 45 
+[atom 04:49:26] Request 45 arrived, input tokens: 707, pending requests: 46 
+[atom 04:49:26] Request 46 arrived, input tokens: 718, pending requests: 47 
+[atom 04:49:26] Request 47 arrived, input tokens: 743, pending requests: 48 
+[atom 04:49:26] Request 48 arrived, input tokens: 763, pending requests: 49 
+[atom 04:49:26] Request 49 arrived, input tokens: 772, pending requests: 50 
+[atom 04:49:26] Request 50 arrived, input tokens: 802, pending requests: 51 
+[atom 04:49:26] Request 51 arrived, input tokens: 726, pending requests: 52 
+[atom 04:49:26] Request 52 arrived, input tokens: 731, pending requests: 53 
+[atom 04:49:26] Request 53 arrived, input tokens: 766, pending requests: 54 
+[atom 04:49:26] Request 54 arrived, input tokens: 772, pending requests: 55 
+[atom 04:49:26] Request 55 arrived, input tokens: 721, pending requests: 56 
+[atom 04:49:26] Request 56 arrived, input tokens: 724, pending requests: 57 
+[atom 04:49:26] Request 57 arrived, input tokens: 750, pending requests: 58 
+[atom 04:49:26] Request 58 arrived, input tokens: 751, pending requests: 59 
+[atom 04:49:26] Request 59 arrived, input tokens: 767, pending requests: 60 
+[atom 04:49:26] Request 60 arrived, input tokens: 744, pending requests: 61 
+[atom 04:49:26] Request 61 arrived, input tokens: 712, pending requests: 62 
+[atom 04:49:26] Request 62 arrived, input tokens: 787, pending requests: 63 
+[atom 04:49:26] Request 63 arrived, input tokens: 731, pending requests: 64 
+[atom 04:49:26] Request 64 arrived, input tokens: 711, pending requests: 65 
+[atom 04:49:26] Request 65 arrived, input tokens: 739, pending requests: 66 
+[atom 04:49:26] Engine Core: put 1 reqs to scheduler
+[atom 04:49:26] Scheduled prefill batch: 1 reqs, 906 token_nums: [906], req_ids: (1,)
+[aiter] shape is M:906, N:2112, K:7168 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:906, N:2112, K:7168 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:906, N:12288, K:1536 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:906, N:12288, K:1536 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:906, N:16384, K:512 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:906, N:16384, K:512 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:906, N:7168, K:8192 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:906, N:7168, K:8192 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:906, N:7168, K:9216, not found tuned config in /tmp/aiter_configs/a4w4_blockscale_tuned_gemm.csv, will use default config!
+[aiter] shape is M:906, N:7168, K:9216, not found tuned config in /tmp/aiter_configs/a4w4_blockscale_tuned_gemm.csv, will use default config!
+[aiter] shape is M:906, N:256, K:7168 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:906, N:256, K:7168 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] run_1stage = False, ksplit = 0 q_type = QuantType.No block_m = 128 use_nt = True, estimated_m_per_expert = 35
+[aiter] [fused_moe] using 2stage default for (256, 1024, 7168, 1024, 257, 9, 'ActivationType.Silu', 'torch.bfloat16', 'torch.bfloat16', 'torch.bfloat16', 'QuantType.No', True, False) 
+[aiter] run_1stage = False, ksplit = 0 q_type = QuantType.No block_m = 128 use_nt = True, estimated_m_per_expert = 35
+[aiter] [fused_moe] using 2stage default for (256, 1024, 7168, 1024, 257, 9, 'ActivationType.Silu', 'torch.bfloat16', 'torch.bfloat16', 'torch.bfloat16', 'QuantType.No', True, False) 
+[atom 04:49:26] Engine Core: put 64 reqs to scheduler
+[atom 04:49:26] Scheduled prefill batch: 19 reqs, 15765 token_nums: [871, 895, 864, 856, 846, 923, 791, 860, 857, 832, 783, 814, 745, 827, 838, 823, 773, 829, 738], req_ids: (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20)
+[aiter] shape is M:15765, N:2112, K:7168 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:15765, N:12288, K:1536 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:15765, N:16384, K:512 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:15765, N:7168, K:8192 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:15765, N:2112, K:7168 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:15765, N:7168, K:9216, not found tuned config in /tmp/aiter_configs/a4w4_blockscale_tuned_gemm.csv, will use default config!
+[aiter] shape is M:15765, N:12288, K:1536 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:15765, N:16384, K:512 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:15765, N:7168, K:8192 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:15765, N:256, K:7168 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:15765, N:7168, K:9216, not found tuned config in /tmp/aiter_configs/a4w4_blockscale_tuned_gemm.csv, will use default config!
+[aiter] shape is M:15765, N:256, K:7168 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:19, N:64640, K:7168 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:19, N:64640, K:7168 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:19, N:12288, K:1536 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:19, N:12288, K:1536 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] shape is M:19, N:7168, K:8192 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] run_1stage = False, ksplit = 0 q_type = QuantType.No block_m = 32 use_nt = True, estimated_m_per_expert = 1
+[aiter] [fused_moe] using 2stage default for (256, 32, 7168, 1024, 257, 9, 'ActivationType.Silu', 'torch.bfloat16', 'torch.bfloat16', 'torch.bfloat16', 'QuantType.No', True, False) 
+[aiter] shape is M:19, N:7168, K:8192 dtype='torch.bfloat16' otype='torch.bfloat16' bias=False, scaleAB=False, bpreshuffle=False, not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv, will use default config! using torch solution:0
+[aiter] run_1stage = False, ksplit = 0 q_type = QuantType.No block_m = 32 use_nt = True, estimated_m_per_expert = 1
+[aiter] [fused_moe] using 2stage default for (256, 32, 7168, 1024, 257, 9, 'ActivationType.Silu', 'torch.bfloat16', 'torch.bfloat16', 'torch.bfloat16', 'QuantType.No', True, False) 
+[atom 04:49:27] Scheduled prefill batch: 21 reqs, 16167 token_nums: [787, 799, 744, 741, 733, 797, 793, 803, 735, 798, 745, 848, 835, 770, 738, 751, 747, 698, 835, 736, 734], req_ids: (21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41)
+Memory access fault by GPU node-2 (Agent handle: 0x19567970) on address 0x7d2c2fdff000. Reason: Unknown.
+Memory access fault by GPU node-3 (Agent handle: 0x2747d1c0) on address 0x718cb7a00000. Reason: Unknown.
+[atom 04:54:33] Request 66 arrived, input tokens: 8193, pending requests: 67 
+[atom 04:54:33] Request 67 arrived, input tokens: 8193, pending requests: 68 
+[atom 04:54:33] Request 68 arrived, input tokens: 8193, pending requests: 69 
+[atom 04:54:33] Request 69 arrived, input tokens: 8193, pending requests: 70 
+[atom 04:54:33] API: Created request_id=cmpl-2429f7deb75b48d79c0f076f9b138c7c, seq_id=66
+INFO:     127.0.0.1:33694 - "POST /v1/completions HTTP/1.1" 200 OK
+[atom 04:54:33] API: Created request_id=cmpl-a13bae2cc2bc45a889f7dd299e75b160, seq_id=67
+[atom 04:54:33] API: Created request_id=cmpl-83bc6c05383b439c95aedc282ac7d574, seq_id=68
+[atom 04:54:33] API: Created request_id=cmpl-81d1d8de7a984132b53934a414a96511, seq_id=69
+INFO:     127.0.0.1:33690 - "POST /v1/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33682 - "POST /v1/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33680 - "POST /v1/completions HTTP/1.1" 200 OK

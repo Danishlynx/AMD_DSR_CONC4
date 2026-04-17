@@ -1,0 +1,47 @@
+{
+  "total_input_tokens": 10485760,
+  "request_throughput": 2.772496911841028,
+  "output_throughput": 2831.304170557031,
+  "total_token_throughput": 25543.598872358732,
+  "mean_ttft_ms": 2012.3337173457,
+  "median_ttft_ms": 417.93037351453677,
+  "p99_ttft_ms": 26646.266922019433,
+  "mean_tpot_ms": 42.58534229651105,
+  "median_tpot_ms": 45.94869768383908,
+  "p99_tpot_ms": 67.15678122587349,
+  "mean_itl_ms": 113.74255525186086,
+  "median_itl_ms": 46.17468302603811,
+  "p99_itl_ms": 866.9956248358353,
+  "mean_e2el_ms": 45450.17099121374,
+  "median_e2el_ms": 48394.19605099829,
+  "p99_e2el_ms": 75737.58949029027,
+  "benchmark_args": {
+    "model": "amd/DeepSeek-R1-0528-MXFP4",
+    "backend": "vllm",
+    "base_url": "http://0.0.0.0:8888",
+    "dataset_name": "random",
+    "random_input_len": 8192,
+    "random_output_len": 1024,
+    "random_range_ratio": 1.0,
+    "num_prompts": 1280,
+    "max_concurrency": 128,
+    "request_rate": "inf"
+  },
+  "tput_per_gpu": 3192.9498590448416,
+  "interactivity": 21.763402455511088,
+  "baseline": {
+    "baseline_median_e2e": 22000,
+    "baseline_tput_per_gpu": 6000,
+    "baseline_median_intvty": 48
+  },
+  "accuracy": {
+    "task": "gsm8k",
+    "gsm8k_metric": 0.9447
+  },
+  "accuracy_validation": {
+    "status": "PASSED",
+    "baseline_gsm8k_metric": 0.38,
+    "gsm8k_tol": 0.0,
+    "minimum_accepted": 0.38
+  }
+}

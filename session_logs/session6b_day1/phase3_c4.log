@@ -1,0 +1,37 @@
+[aiter] import [module_aiter_core] under /app/aiter-test/aiter/jit/module_aiter_core.so
+Namespace(backend='vllm', base_url='http://0.0.0.0:8888', host='127.0.0.1', port=8000, endpoint='/v1/completions', dataset_name='random', dataset_path=None, max_concurrency=4, model='amd/DeepSeek-R1-0528-MXFP4', tokenizer=None, best_of=1, use_beam_search=False, num_prompts=40, logprobs=None, request_rate=inf, burstiness=1.0, seed=0, trust_remote_code=False, disable_tqdm=False, profile=False, save_result=False, save_detailed=False, metadata=None, result_dir=None, result_filename=None, ignore_eos=True, percentile_metrics='ttft,tpot,itl', metric_percentiles='99', goodput=None, sonnet_input_len=550, sonnet_output_len=150, sonnet_prefix_len=200, sharegpt_output_len=None, random_input_len=8192, random_output_len=1024, random_range_ratio=1.0, random_prefix_len=0, use_chat_template=True, hf_subset=None, hf_split=None, hf_output_len=None, tokenizer_mode='auto', served_model_name=None, lora_modules=None, num_warmups=4)
+-------------------  Input/Output Length Statistics  -------------------
+ input_lens : min=8192  max=8192  mean=8192.00  avg_token_mismatch=3.00  
+ output_lens: min=1024  max=1024  mean=1024.00 
+------------------------------------------------------------------------ 
+
+Starting initial single prompt test run...
+Warming up with 4 requests...
+  0%|          | 0/4 [00:00<?, ?it/s] 25%|██▌       | 1/4 [00:10<00:30, 10.30s/it]100%|██████████| 4/4 [00:10<00:00,  2.58s/it]
+Warmup completed.
+Traffic request rate: inf
+Burstiness factor: 1.0 (Poisson process)
+Maximum request concurrency: 4
+  0%|          | 0/40 [00:00<?, ?it/s]  2%|▎         | 1/40 [00:09<06:22,  9.81s/it] 12%|█▎        | 5/40 [00:19<02:02,  3.51s/it] 22%|██▎       | 9/40 [00:29<01:30,  2.91s/it] 32%|███▎      | 13/40 [00:38<01:12,  2.69s/it] 42%|████▎     | 17/40 [00:48<00:59,  2.58s/it] 52%|█████▎    | 21/40 [00:57<00:47,  2.52s/it] 62%|██████▎   | 25/40 [01:07<00:37,  2.48s/it] 72%|███████▎  | 29/40 [01:17<00:27,  2.46s/it] 82%|████████▎ | 33/40 [01:26<00:17,  2.44s/it] 92%|█████████▎| 37/40 [01:36<00:07,  2.43s/it]100%|██████████| 40/40 [01:36<00:00,  2.41s/it]
+Starting main benchmark run...
+============ Serving Benchmark Result ============
+Successful requests:                     40        
+Benchmark duration (s):                  96.51     
+Total input tokens:                      327680    
+Total generated tokens:                  40960     
+Request throughput (req/s):              0.41      
+Output token throughput (tok/s):         424.39    
+Total Token throughput (tok/s):          3819.54   
+---------------Time to First Token----------------
+Mean TTFT (ms):                          665.59    
+Median TTFT (ms):                        751.47    
+P99 TTFT (ms):                           971.59    
+-----Time per Output Token (excl. 1st token)------
+Mean TPOT (ms):                          8.78      
+Median TPOT (ms):                        8.76      
+P99 TPOT (ms):                           9.19      
+---------------Inter-token Latency----------------
+Mean ITL (ms):                           8.78      
+Median ITL (ms):                         8.51      
+P99 ITL (ms):                            8.84      
+==================================================

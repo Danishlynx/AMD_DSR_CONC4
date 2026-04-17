@@ -1,0 +1,9 @@
+Namespace(backend='vllm', base_url='http://0.0.0.0:8888', host='127.0.0.1', port=8000, endpoint='/v1/completions', dataset_name='random', dataset_path=None, max_concurrency=4, model='amd/DeepSeek-R1-0528-MXFP4', tokenizer=None, best_of=1, use_beam_search=False, num_prompts=40, logprobs=None, request_rate=inf, burstiness=1.0, seed=0, trust_remote_code=False, disable_tqdm=False, profile=False, save_result=False, save_detailed=False, metadata=None, result_dir=None, result_filename=None, ignore_eos=True, percentile_metrics='ttft,tpot,itl', metric_percentiles='99', goodput=None, sonnet_input_len=550, sonnet_output_len=150, sonnet_prefix_len=200, sharegpt_output_len=None, random_input_len=8192, random_output_len=1024, random_range_ratio=1.0, random_prefix_len=0, use_chat_template=True, hf_subset=None, hf_split=None, hf_output_len=None, tokenizer_mode='auto', served_model_name=None, lora_modules=None, num_warmups=4)
+-------------------  Input/Output Length Statistics  -------------------
+ input_lens : min=8192  max=8192  mean=8192.00  avg_token_mismatch=3.00  
+ output_lens: min=1024  max=1024  mean=1024.00 
+------------------------------------------------------------------------ 
+
+Starting initial single prompt test run...
+Warming up with 4 requests...
+  0%|          | 0/4 [00:00<?, ?it/s]
