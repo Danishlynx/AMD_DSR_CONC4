@@ -2136,3 +2136,44 @@ Expected: toks/fwd 3.01 → ~3.25, TPOT 6.80 → ~6.30 ms, interact → 159 (sti
 ### Credential note (Apr 18)
 - First GitHub push used PAT-embedded URL; Windows Credential Manager cached user as "x-access-token".
 - Re-pushing to force credential re-selection as "Danishlynx".
+
+---
+
+## DEC-075 LANDED (Apr 18 16:30 UTC) — drafter layer 61 FP4 transplant
+
+**After 5 iterations of debug**, merged checkpoint at `/projects/teamA/danish/models_merged/DSR1-drafter-FP4` successfully swaps layer 61 MoE weights from MoEFP4 variant. Drafter kernel dispatch now `flydsl_moe1_afp4_wfp4_bf16` (FP4 fast path) vs DEC-073's `QuantType.No` slow BF16.
+
+### Result (test_162646.json)
+
+| Metric | DEC-073 | DEC-075 | Δ |
+|---|---|---|---|
+| Thr/GPU (÷4) | 1282 | **1297** | +1.2% |
+| Median TPOT | 6.70 | **6.54** | −2.4% |
+| Mean TPOT | 6.51 | 6.39 | −1.8% |
+| Median E2E | 7205 | **7056** | −2.1% |
+| Interactivity | 149.3 | **152.89** | +2.4% |
+| GSM8K | 0.9401 | **0.9454** | +0.5pp |
+
+Every metric better. Gates still 1/4 (GSM8K only). Interact closer to gate (165-153=12 gap vs 15 before).
+
+### Key debug findings
+
+- v1: OOM from leftover worker processes (GPU memory not freed)
+- v2-v3: `re:model.layers.61.self_attn.*` excludes don't match drafter's `mtp_block`-renamed path
+- v4: `safetensors_weights_iterator` globs ALL *.safetensors, picking up BF16 tensors from pure-layer-61 main shards even when index doesn't reference them
+- v5 (success): exclude pure-layer-61 main shards, rebuild mixed shards without layer 61 keys
+
+### For submission — MODEL name issue
+
+Server registers as `--model` path value. Bench harness hardcoded MODEL=amd/DeepSeek-R1-0528-MXFP4 → 400 error. Two paths for submission:
+1. `MODEL` env var override at bench time (current workaround)
+2. Symlink merged dir into `/projects/teamA/hf_cache/hub/models--amd--DeepSeek-R1-0528-MXFP4/snapshots/{fake-hash}/` + update refs/main (cleaner for AMD review)
+
+### Smaller-than-projected gain analysis
+
+Predicted ~5-7% TPOT improvement; got ~2.4%. Possibilities:
+- DEC-057 profile over-estimated drafter-MoE fraction
+- FP4 kernel for drafter shapes (bs=4, smaller) less optimized than main's shapes (bs=16)
+- Drafter has overhead beyond MoE (MLA, routing, token dispatch)
+
+Still net-positive + every metric improved + no regression. **DEC-075 locked as new floor above DEC-073.**

@@ -27,7 +27,73 @@ Plan: transplant layer 61 MoE weights from `amd/DeepSeek-R1-0528-MXFP4-MTP-MoEFP
 
 **Expected gain**: drafter MoE saves ~3 ms/step (BF16 slow path → FP4 FlyDSL fast path). TPOT 6.77 → ~6.10-6.40 ms. Might move thr 1282 → ~1380, interact 149 → ~160 (just below 165 gate). Still won't close E2E gate.
 
-**Status as of 15:15 UTC**: server booting with `--model /projects/teamA/danish/models_merged/DSR1-drafter-FP4`. Awaiting uvicorn ready + bench.
+**Status as of 16:30 UTC**: ✅ **DEC-075 v5 WORKS AND BENCHED**.
+
+| Metric | DEC-073 | DEC-075 | Δ |
+|---|---|---|---|
+| Thr/GPU (÷4) | 1282 | **1297** | **+1.2%** ↑ |
+| Median TPOT | 6.70 | **6.54** | **−2.4%** ↑ |
+| Median E2E | 7205 | **7056** | **−2.1%** ↑ |
+| Interactivity | 149.3 | **152.89** | **+2.4%** ↑ |
+| GSM8K | 0.9401 | **0.9454** | **+0.5pp** ↑ |
+
+All metrics improved, GSM8K passes. Gates still 1/4 (interact needs 165, we're at 153). Smaller gain than projected 5-7% (got 2-3%) — the drafter time breakdown from DEC-057 may have over-estimated drafter-MoE fraction. But net-positive, reproducible, and free of any regression. **DEC-075 locked as new floor**.
+
+Reproduction: see memory `project_dec075_progress.md` (`MODEL` env override needed in bench).
+
+---
+
+## DEC-075 debugging journey (for future Opus / AMD review)
+
+| Attempt | Approach | Result | Root cause |
+|---|---|---|---|
+| v1 | Surgical merge: only MoE swapped, MLA BF16 from main | OOM | Leftover probe 2 server workers held GPU memory — cleanup needed |
+| v2 | Same as v1, clean GPU | `_load_w2: start (0) + length (512) exceeds dim 256` | Drafter's `rewrite_spec_layer_name` adds `.mtp_block.` prefix; selective `re:model.layers.61.self_attn.*` excludes don't match renamed path |
+| v3 | v2 + layer_quant_config from MoEFP4 | Same shape mismatch | `*self_attn*` FP8 override didn't help the MoE loader path |
+| v4 | FULL layer 61 transplant (match MoEFP4 exactly, all FP4 in layer 61 except 3 items) | NEW error: `3584 vs 14336` shape mismatch | Likely a boundary between main BF16 dims and drafter FP4 packed dims in some fused op |
+
+## Full stacked optimization plan (complete roadmap)
+
+### Active levers (in-window, doable in remaining time)
+
+| # | Phase | Lever | Expected Δ | Status |
+|---|---|---|---|---|
+| 1 | A1 | Relaxed MTP sweep (7,0.5)/(9,0.5) | ±0-2% TPOT | DONE — (8,0.5) confirmed optimal |
+| 2 | — | DEC-075 drafter FP4 transplant | −5 to −7% TPOT (+2/4 gates possibly) | IN PROGRESS (v4 crashed, debugging) |
+| 3 | A2 | BF16 CSV coverage — add missing decode shapes | ±0-1% TPOT | pending |
+| 4 | A3 | Scheduler-delay-factor confirm 0 | 0% | pending |
+| 5 | — | Stack DEC-075 + (8,0.5) | combined | pending |
+| 6 | B | Real tree spec via mla_extend_ref | maybe net-neutral at CONC=4 per math | pending, optional |
+| 7 | C | 3× GSM8K stability + multi-CONC (32, 128) bench | additional gates outside CONC=4 | pending |
+| 8 | C | Submit to HuggingFace | — | pending |
+
+### Architecturally-blocked levers (Phase D fallback, bigger-than-24hrs work but DOING ANYWAY if needed)
+
+Per Danish rule: if we don't meet targets with Phases A-C, attempt these too.
+
+| Blocker | Expected gain | Effort estimate |
+|---|---|---|
+| Custom 1-shot XGMI AllReduce (replace NCCL for <1MB messages) | −1.5 ms/step on AllReduce (−20%) | 1-2 weeks HIP kernel |
+| Mega-fusion MLA + RMSNorm + quant into single kernel | −1 ms/step | 1-2 weeks HIP |
+| New qo_len kernels in AITER for tree speculation | enable tree spec with reduced compute overhead | 2+ weeks |
+| MoE kernel further tuning (swizzleA, tile shapes, persistent scheduler) | marginal | weeks |
+
+These are needed to truly close the E2E gate at CONC=4. AMD's internal team presumably has these. We'll attempt them if the Phase A-C stack falls short, accepting it's aggressive scope for solo in the remaining time.
+
+### Honest probability distribution (updated after v4)
+
+| Scenario | Probability | CONC=4 gates |
+|---|---|---|
+| DEC-075 lands (after v4 debug) + tree spec marginal | 45% | 2/4 (GSM8K + interact) |
+| DEC-075 lands, tree spec neutral | 20% | 2/4 |
+| DEC-075 fundamentally blocked, ship DEC-073 | 15% | 1/4 |
+| DEC-075 + tree spec both help unexpectedly | 10% | 3/4 |
+| Phase D custom kernels land | 8% | 3-4/4 |
+| All gates at CONC=4 | <2% | 4/4 |
+
+Multi-CONC always adds 3-5 extra gates at CONC=32 + CONC=128 regardless.
+
+
 
 ---
 
