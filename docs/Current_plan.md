@@ -1,4 +1,37 @@
-# DSR1 CONC=4 — FINAL PUSH current state (Apr 18 ~07:20 UTC)
+# DSR1 CONC=4 — FINAL PUSH current state (Apr 18 ~15:15 UTC)
+
+## Latest experiments (Apr 18 after SSH access granted)
+
+### Phase A1 relaxed MTP fine sweep
+
+| Probe | Config | Thr/GPU | TPOT | Interact | E2E | GSM8K | Verdict |
+|---|---|---|---|---|---|---|---|
+| DEC-073 (reference) | (8, 0.5) | 1282 | 6.70 | 149.3 | 7205 | 0.9401 | baseline |
+| Probe 1 | (7, 0.5) | 1299 (+1.3%) | 6.73 (+0.4%) | 148.6 (-0.5%) | 7421 (+3.0%) | 0.9439 (+0.4pp) | noise, E2E +3% regression |
+| Probe 2 | (9, 0.5) | 1272 (-0.8%) | 6.60 (-1.5%) | 151.48 (+1.5%) | 7300 (+1.3%) | 0.9333 (-0.7pp) | marginal speed, GSM8K near floor |
+
+**Verdict**: (8, 0.5) is the sweet spot. Both sweeps trade accuracy for speed non-productively. (8, 0.5) preserved as DEC-073.
+
+### DEC-075 UNLOCKED (Danish approved weight modification)
+
+Plan: transplant layer 61 MoE weights from `amd/DeepSeek-R1-0528-MXFP4-MTP-MoEFP4` (FP4) into our main `amd/DeepSeek-R1-0528-MXFP4` (BF16 layer 61) via synthetic merged checkpoint directory.
+
+**Surgical scope** (not naive): swap ONLY layer 61 MoE experts + gate + shared_experts to FP4. Keep MLA projections, layernorms, embed_tokens, eh_proj, shared_head as BF16 from main. Captures ~95% of drafter speedup with minimum FP4-kernel-shape risk.
+
+**Merged checkpoint built** at `/projects/teamA/danish/models_merged/DSR1-drafter-FP4`:
+- 91,681 total keys (vs 90,910 in main)
+- 82 main shards symlinked + 2 MoEFP4 shards symlinked (layer 61 only)
+- Modified config.json: removed `re:model.layers.61.*` catch-all exclude, added specific excludes for layer 61 self_attn/layernorms/embed/eh_proj/shared_head
+- All non-MoE layer 61 keys → main's BF16 shards
+- Layer 61 MoE experts/gate/shared_experts → MoEFP4's FP4 shards
+
+**Expected gain**: drafter MoE saves ~3 ms/step (BF16 slow path → FP4 FlyDSL fast path). TPOT 6.77 → ~6.10-6.40 ms. Might move thr 1282 → ~1380, interact 149 → ~160 (just below 165 gate). Still won't close E2E gate.
+
+**Status as of 15:15 UTC**: server booting with `--model /projects/teamA/danish/models_merged/DSR1-drafter-FP4`. Awaiting uvicorn ready + bench.
+
+---
+
+# DSR1 CONC=4 — PRIOR STATE (Apr 18 ~07:20 UTC)
 
 ## 30-sec briefing for new opus
 

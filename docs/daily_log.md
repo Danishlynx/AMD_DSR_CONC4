@@ -2105,3 +2105,30 @@ Expected: toks/fwd 3.01 → ~3.25, TPOT 6.80 → ~6.30 ms, interact → 159 (sti
 
 ---
 
+
+---
+
+## DEC-xxx Apr 18 (post-DEC-073, post-SSH-grant)
+
+### Phase A1 — relaxed MTP fine sweep (probes at SSH-enabled phase)
+
+- **Probe 1 (7, 0.5)**: 1299/6.73/148.6/7421/0.9439. Noise/marginal, E2E +3% regression vs DEC-073.
+- **Probe 2 (9, 0.5)**: 1272/6.60/151.48/7300/0.9333. Marginal TPOT gain (-1.5%), interact +1.5%, but GSM8K dropped to 0.9333 (close to 0.93 floor). Not worth keeping.
+- **Verdict**: (8, 0.5) is the sweet spot. Reverted rejection_sampler.py to DEC-073.
+
+### DEC-075 UNLOCKED by Danish (weight transplant approved)
+
+- Plan: surgical layer-61 MoE transplant from `amd/DeepSeek-R1-0528-MXFP4-MTP-MoEFP4` (FP4 drafter) into our main `amd/DeepSeek-R1-0528-MXFP4` (BF16 drafter), via synthetic merged checkpoint directory.
+- Scope: swap ONLY layer 61 MoE (experts + gate + shared_experts). Keep MLA/layernorms/embed/eh_proj/shared_head BF16 from main. Surgical, not naive — avoids FP4 MLA kernel shape risk.
+- Built `/projects/teamA/danish/models_merged/DSR1-drafter-FP4` with 91,681 merged keys (82 main shards + 2 MoEFP4 shards symlinked).
+- Expected: drafter MoE BF16 slow path (QuantType.No) → FP4 FlyDSL fast path (flydsl_moe1_afp4_wfp4_bf16). Save ~3ms/step. TPOT 6.77 → ~6.10-6.40.
+- First boot attempt CRASHED with OOM — leftover probe 2 server workers held GPU memory. Cleaned + relaunched at 15:18 UTC. Polling for ready.
+
+### Infrastructure / cleanup
+
+- Deleted 5.3 TB of GPU core dumps from old crashes
+- Cleaned 376 GB duplicate HF cache in /tmp/.cache
+- Pushed DEC-073 snapshot to GitHub: https://github.com/Danishlynx/AMD_DSR_CNCC4
+- Organized /projects/teamA inventory — SERVER_MAP.md documents full layout
+- Separation-of-concerns brief for Kimi Opus written (BRIEF_FOR_KIMI_OPUS.md)
+
