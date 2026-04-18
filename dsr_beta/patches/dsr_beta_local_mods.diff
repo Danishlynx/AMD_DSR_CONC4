@@ -1,0 +1,28 @@
+diff --git a/atom/model_ops/attention_mla.py b/atom/model_ops/attention_mla.py
+index 89a74f9..baaffde 100644
+--- a/atom/model_ops/attention_mla.py
++++ b/atom/model_ops/attention_mla.py
+@@ -593,7 +593,7 @@ class MLAAttention(nn.Module):
+             paged_kv_indices,
+             attn_metadata.kv_last_page_lens,
+             attn_metadata.max_seqlen_q,
+-            num_kv_splits=16,
++            num_kv_splits=None,
+             sm_scale=self.scale,
+             work_meta_data=work_meta_data,
+             work_indptr=work_indptr,
+diff --git a/atom/model_ops/rejection_sampler.py b/atom/model_ops/rejection_sampler.py
+index 4697c0e..143af3e 100644
+--- a/atom/model_ops/rejection_sampler.py
++++ b/atom/model_ops/rejection_sampler.py
+@@ -9,8 +9,8 @@ from torch import nn
+
+ ATOM_ENABLE_RELAXED_MTP = envs.ATOM_ENABLE_RELAXED_MTP
+ if ATOM_ENABLE_RELAXED_MTP:
+-    RELAXED_TOP_N = 10
+-    RELAXED_DELTA = 0.6
++    RELAXED_TOP_N = 8
++    RELAXED_DELTA = 0.5
+ else:
+     RELAXED_TOP_N = 1
+     RELAXED_DELTA = 0.0
