@@ -1,127 +1,161 @@
-# AMD Phase 2 Hackathon — DSR1 Track — DEC-073 Snapshot
+# AMD Phase 2 Hackathon — DSR1 Track — DSR_beta Snapshot
 
 This repo is a **backup + reproducibility package** for Danish's DeepSeek-R1 (DSR1) track submission.
 
-## Result (DEC-073 floor)
+## Branch structure
+
+| Branch | Content | Purpose |
+|---|---|---|
+| **`main`** | DEC-075 production floor (1278/6.74/148/7253) | Stable fallback — proven reproducible on ROCm 7.1.1 stack |
+| **`dsr_beta_snapshot`** (this branch) | **DSR_beta WIN (1335/6.40/156/7009)** | Latest best — ROCm 7.2.2 + latest aiter/ATOM/flydsl + TBO prefill |
+
+## Current best result (this branch — DSR_beta + TBO prefill, 2026-04-18)
 
 Measured via the official harness `./dsr1_benchmark perf`:
 
 | Metric | Value | Gate | Pass? |
 |---|---|---|---|
-| Thr/GPU (÷4) | **1257** | ≥ 1500 | ❌ −17% |
-| Median TPOT | **6.77 ms** | — | — |
-| Interactivity | **147.8** | ≥ 165 | ❌ −10% |
-| Median E2E | **7390 ms** | ≤ 5000 | ❌ +48% |
-| GSM8K | **0.9348** | ≥ 0.93 | ✅ |
+| Thr/GPU (÷4) | **1335** | ≥ 1500 | ❌ −11% |
+| Median TPOT | **6.40 ms** | — | — |
+| Mean TPOT | **6.18 ms** | — | — |
+| Interactivity | **156.24** | ≥ 165 | ❌ −5.5% |
+| Median E2E | **7009 ms** | ≤ 5000 | ❌ +40% |
+| Median ITL | **16.18 ms** | — | — (MTP=3 burst ✓) |
+| GSM8K | **0.9386** | ≥ 0.93 | ✅ |
 | **Gates** | **1/4** | — | GSM8K only |
 
-Total throughput: **5027 tok/s** at ISL=8192, OSL=1024, CONC=4 — about **+30% above AMD's public baseline** of 3871 tok/s at same shape.
+Total throughput: **5339 tok/s** at ISL=8192, OSL=1024, CONC=4.
 
-## Stack
+## Gains vs production DEC-075 floor (`main` branch)
 
-- **ATOM** commit `108a70e` + 3 local patches (in `ATOM_main/`)
-- **aiter** commit `f8c1d76bd` + 97-row BF16 decode tune (`aiter_configs/`)
-- **flydsl** 0.1.2
-- **Model**: `amd/DeepSeek-R1-0528-MXFP4` (unmodified, as shipped)
-- **Hardware**: 4× AMD Instinct MI355X, TP=4 single-replica
+| Metric | DEC-075 (main) | DSR_beta (this branch) | Δ |
+|---|---|---|---|
+| Thr/GPU | 1278 | **1335** | **+4.4%** |
+| Median TPOT | 6.74 | **6.40** | **−5.0%** |
+| Interactivity | 148 | **156** | **+5.4%** |
+| Median E2E | 7253 | **7009** | **−3.4%** |
+| GSM8K | ≥0.93 | 0.9386 | stable |
+
+Interactivity gap to gate narrowed from 10.3% → 5.5%.
+
+## Stack (this branch)
+
+- **Base image**: `rocm/atom-dev@sha256:52c5195a712b5d3a0993d5e63de9b8ffc13a77d0c4b2f31d40afe9e62c12ab5f` (tag `rocm/atom-dev:latest`, 2026-04-17)
+- **ROCm**: 7.2.2 (vs prod 7.1.1)
+- **PyTorch**: 2.10.0+rocm7.2.2.git40d237bf (vs prod 2.9)
+- **aiter**: commit `73ad0023e15e9735b3af95b3357b99cf7f801bf1` on main (v0.1.12.post1+)
+- **ATOM**: commit `f8453e3fc0f65191fb2034602dc9a2066a78020b` on main (v0.1.3.dev90+, includes TBO)
+- **flydsl**: 0.1.3.1 (vs prod 0.1.2)
+- **triton**: 3.5.1
+- **Model**: `/projects/teamA/danish/models_merged/DSR1-drafter-FP4` — DEC-075 merged checkpoint (layer 61 MoE swapped from MoEFP4 variant for FP4 drafter fast path)
+- **Hardware**: 4× AMD Instinct MI355X, TP=4 single-replica, port **8890**
 - **KV cache**: FP8
-- **Speculative decoding**: native DeepSeek MTP (k=3), relaxed acceptance (top_n=8, delta=0.5)
+- **Speculation**: native DeepSeek MTP (k=3), relaxed acceptance (top_n=8, delta=0.5)
+- **⭐ Key flag**: `--enable-tbo prefill` (new in ATOM Apr 16) — the one delta from DEC-075 that delivered the win
 
-## Changes made (mergeable against upstream)
+## Local patches (mergeable against upstream)
 
-### ATOM (3 files in [ATOM_main/atom/](ATOM_main/atom/))
+Full diff: [dsr_beta/patches/dsr_beta_local_mods.diff](dsr_beta/patches/dsr_beta_local_mods.diff)
+
 | File | Change | Rationale |
 |---|---|---|
-| `model_ops/rejection_sampler.py` | Hardcode `RELAXED_TOP_N = 8`, `RELAXED_DELTA = 0.5` | Sweep showed this point maxes accept-rate while passing GSM8K gate |
-| `model_ops/attention_mla.py` | `num_kv_splits=None` (auto-tune) | Manual value 16 was suboptimal for TP=4 SR shape |
-| `spec_decode/eagle.py` | Phase 4A v4 drafter HIP graph scaffolding | Null perf on our workload; kept as harmless infrastructure for downstream tree-spec work |
-
-### aiter ([aiter_configs/dsv3_bf16_tuned_gemm.csv](aiter_configs/dsv3_bf16_tuned_gemm.csv))
-97 tuned decode-shape rows (M=1/4/16 LM head, M=16 MLA projections) tuned via gradlib with errRatio=0.05. Extends the upstream file.
+| `atom/model_ops/rejection_sampler.py` | `RELAXED_TOP_N = 10 → 8`, `RELAXED_DELTA = 0.6 → 0.5` | Sweep showed this point maxes accept-rate while passing GSM8K gate (DEC-073 tuning) |
+| `atom/model_ops/attention_mla.py` | `num_kv_splits=16 → None` (auto-tune) | Manual value 16 was suboptimal for TP=4 SR shape (Session 6A intervention) |
 
 ## Reproduction
 
+Three scripts in [dsr_beta/scripts/](dsr_beta/scripts/):
+
 ```bash
-# Inside container danish_atom_main with ATOM patches + aiter CSV applied:
-export HOME=/tmp AITER_BUILD_DIR=/tmp/.aiter_cache TRITON_CACHE_DIR=/tmp/.triton_cache
-export HIP_FORCE_DEV_KERNARG=1 NCCL_MIN_NCHANNELS=16
-export ATOM_DUAL_STREAM_MOE_TOKEN_THRESHOLD=256 ATOM_ENABLE_RELAXED_MTP=1
-export HF_HOME=/projects/teamA/hf_cache HUGGINGFACE_HUB_CACHE=/projects/teamA/hf_cache/hub
-export HIP_VISIBLE_DEVICES=0,1,2,3
+# 1. Create DSR_beta container with pinned image + apply local patches
+bash dsr_beta/scripts/dsr_beta_setup.sh
 
-cd /workspace/ATOM_main && \
-python3 -m atom.entrypoints.openai_server \
-  --model amd/DeepSeek-R1-0528-MXFP4 --server-port 8888 -tp 4 \
-  --kv_cache_dtype fp8 --method mtp --num-speculative-tokens 3 \
-  --max-model-len 10240 --gpu-memory-utilization 0.85
+# 2. Launch server with the winning recipe (--enable-tbo prefill)
+bash dsr_beta/scripts/dsr_beta_launch.sh
 
-# In separate shell:
-cd /workspace/amdgpu_bounty_optimization/dsr1-fp4-atom-mtp-mi355x
-source specific_conc_var.sh
-./dsr1_benchmark perf
+# 3. Bench
+bash dsr_beta/scripts/dsr_beta_bench.sh
 ```
 
-See [docs/best_reproduce.md](docs/best_reproduce.md) for full details.
+Full step-by-step recipe: [dsr_beta/REPRODUCTION.md](dsr_beta/REPRODUCTION.md)
+
+## Experiments log (all 4 DSR_beta runs on Apr 18)
+
+| # | Config | Thr/GPU (÷4) | Median TPOT | Interact | E2E | Verdict |
+|---|---|---|---|---|---|---|
+| 1 | Baseline (upgrade only, no TBO) | 1315 | 6.56 | 152.46 | 7150 | +2.9% vs DEC-075 |
+| **2** | **+ TBO prefill** | **1335** | **6.40** | **156.24** | **7009** | **+4.4% vs DEC-075 (BEST)** |
+| 3 | + TBO all | 939 | 9.53 | 104.96 | 10099 | −30% regression |
+| 4 | + MORI low-latency on top of (2) | 1322 | 6.64 | 150.52 | 7201 | −1% (overhead at TP-sharded MoE) |
+
+## Experiments deferred (regressed at CONC=4, may work at higher CONC)
+
+Archive of CONC-conditional dead levers — retry in CONC=32/128 tracks:
+
+- `--enable-tbo all` — designed for larger batches (CONC=32+)
+- `--all2all-backend low-latency` (MORI AsyncLL) — needs EP to have work to overlap; retry at CONC=128 + EP=8
+- `--enable-expert-parallel` — crashed on ROCm 7.1.1, retry on this new stack
+- QuickReduce INT4 — min 16 MB tensor, valid at CONC=128 prefill
+- DP×TP combos — retry on ROCm 7.2.2
+
+Permanently dead (no retry): `--num-speculative-tokens 4` (MLA qseqlen=5 kernel missing on gfx950).
+
+## DEC lineage (historical — on main branch)
+
+| DEC | Lever | Result |
+|---|---|---|
+| DEC-056 | DUAL_STREAM=256 | floor 1209/6.89 |
+| DEC-066 | BF16 CSV 9 rows | 1221/6.73/148.6 |
+| DEC-071 | BF16 decode tune (97 rows) | 1267/6.96/143.8 |
+| DEC-072 | BF16 prefill tune | DEAD — GSM8K 0.865 crash |
+| DEC-073 | Relaxed MTP (8, 0.5) | 1270/6.80/147.1/7318 |
+| DEC-074 | Naive tree spec | ABANDONED — kernel refactor regressed |
+| DEC-075 | **Drafter FP4 transplant (merged checkpoint)** | **1278/6.74/148/7253 (main branch floor)** |
+| **Apr 18** | **DSR_beta stack + TBO prefill** | **1335/6.40/156/7009 (this branch)** |
+
+## Open candidates (pending work)
+
+1. **Other new ATOM flags** — deep-dive into upstream arg_utils.py since our pin for undocumented flags
+2. **BF16 GEMM CSV retune** on ROCm 7.2.2 — old DEC-071 tune incompatible (hipBLASLt solidx renumbered between 7.1.1 → 7.2.2). Expected +1-2% after retune.
+3. **Tree speculation** — EAGLE-2 style on the DSR_beta stack. The real gate closer (current kernel floor blocks E2E at 4.52 TPOT).
+4. **EP=8 + MORI** stack — reserved for CONC=128 track.
+
+See [docs/Current_plan.md](docs/Current_plan.md) for live status.
 
 ## Repository layout
 
 ```
 .
-├── README.md                   ← you are here
-├── ATOM_main/                  ← full modified ATOM source tree with .git history + .bak files
-├── aiter_configs/
-│   └── dsv3_bf16_tuned_gemm.csv ← tuned 97-row CSV
-├── bench_results/              ← raw test_*.json from the official harness (proof of numbers)
-├── session_logs/               ← chronological engineering session logs from earlier sprints
-├── docs/                       ← strategic and planning documents
-│   ├── SERVER_MAP.md           ← infrastructure overview (server + containers + filesystem)
-│   ├── BRIEF_FOR_KIMI_OPUS.md  ← separation-of-concerns for Kimi track
-│   ├── Current_plan.md         ← active plan state
-│   ├── MASTER_FINDINGS.md      ← canonical project findings
-│   ├── daily_log.md            ← chronological DEC record
-│   ├── Danish.md               ← strategic context
-│   └── best_reproduce.md       ← full reproduction instructions for DEC-073
-├── patches/                    ← (future) clean diffs vs upstream for PR submission
-└── repro/                      ← (future) repro scripts
+├── README.md                                 ← you are here
+├── dsr_beta/                                 ← DSR_beta snapshot (this branch's key addition)
+│   ├── REPRODUCTION.md                       ← full reproduction recipe with image digest
+│   ├── patches/dsr_beta_local_mods.diff      ← the 2 local patches
+│   ├── scripts/
+│   │   ├── dsr_beta_setup.sh                 ← pull image + create container + apply patches
+│   │   ├── dsr_beta_launch.sh                ← launch server (winning recipe)
+│   │   └── dsr_beta_bench.sh                 ← bench runner
+│   └── bench_results/
+│       └── dsr_beta_tbo_prefill_WIN.json     ← the 1335/6.40/156 bench JSON
+├── ATOM_main/                                ← modified ATOM source tree (DEC-075 production state)
+├── aiter_configs/                            ← 97-row BF16 tune (DEC-071, ROCm 7.1.1 — NOT compatible with 7.2.2)
+├── bench_results/                            ← raw test_*.json from official harness (DEC-075)
+├── session_logs/                             ← chronological engineering logs
+├── docs/
+│   ├── SERVER_MAP.md
+│   ├── BRIEF_FOR_KIMI_OPUS.md
+│   ├── Current_plan.md                       ← live plan state
+│   ├── MASTER_FINDINGS.md                    ← canonical findings
+│   ├── daily_log.md                          ← chronological DEC record
+│   ├── Danish.md                             ← strategic context
+│   └── best_reproduce.md                     ← DEC-075 production reproduction
+├── scripts/                                  ← DEC-075 helpers (merge_dec075_v5.py, parse_trace.py)
+└── patches/                                  ← (future) clean diffs for upstream PRs
 ```
-
-## What's in `ATOM_main/` specifically
-
-- Modified source files (the 3 above)
-- Full `.bak_*` history (each backup named after the attempt, e.g. `rejection_sampler.py.bak_before_tree_spec_0641`) — useful forensic record of what was tried
-- `atom/spec_decode/tree_spec.py` — a 120-line EAGLE-2-style tree topology builder added by a prior session, **not currently wired** into eagle.py (candidate for future tree-speculation work)
-
-## DEC lineage
-
-| DEC | Lever | Result |
-|---|---|---|
-| DEC-056 | DUAL_STREAM=256 | floor 1209/6.89 |
-| DEC-058 | +9-row BF16 CSV tune + NCCL=16 | 1202/7.19 |
-| DEC-064 | Relaxed MTP (7, 0.4) | 1253/7.06 |
-| DEC-066 | +new tuned CSV (9 rows total) | 1221/6.73/148.6 |
-| DEC-069 | Phase 4A v4 drafter HIP graph | NULL (DEC-057 profile proved no Python gap) |
-| DEC-071 | BF16 decode tune (88 new rows → 97 total) | 1267/6.96/143.8 |
-| DEC-072 | BF16 prefill tune | DEAD — GSM8K 0.865 crash, reverted |
-| **DEC-073** | **Relaxed MTP (8, 0.5)** | **1270/6.80/147.1/7318/0.934** ← current floor |
-| DEC-074 | Naive tree spec (top-2 at last pos) | ABANDONED — kernel refactor regressed to 0.807 |
-
-## Probes explored and ruled out (post-DEC-073)
-
-- **EP + TP=4** (`--enable-expert-parallel`): GSM8K drops to 0.9287, fails gate
-- **MTP=4** (`--num-speculative-tokens 4`): AITER asserts `qo_len ≤ 4` for FP8 MLA — hard kernel constraint
-- **BF16 KV cache** (`--kv_cache_dtype bf16`): −4% throughput, +6% TPOT — regresses
-- **Weight modification** (transplant or hand-requant): ruled out by competitor's policy (stay on stock model)
-
-## Open candidate — real tree speculation
-
-- `atom/spec_decode/tree_spec.py` (prior session artifact) plus `aiter/op_tests/triton_tests/utils/mla_extend_ref.py` (SGLang-origin 460-line MLA Triton kernel with full `custom_mask` support) provide the infrastructure for a real tree-spec implementation with BF=2 branching at depth 0 (topology: 1 root + 2 branches × 3 depth = 7 leaves, `qo_len=7`)
-- Not yet implemented in our stack; feasibility analysis ongoing
-- See [docs/Current_plan.md](docs/Current_plan.md) for status
 
 ## Legal / usage
 
-Private snapshot, backup only. Do not redistribute without Danish's permission. AMD ATOM code is licensed per ROCm/atom repository's original license.
+Private snapshot, backup only. Do not redistribute without Danish's permission. AMD ATOM code is licensed per ROCm/ATOM repository's original license.
 
 ---
 
-Generated 2026-04-18 as a disaster-recovery snapshot before potential AMD IT cleanup of the hackathon server.
+Last update: 2026-04-18 DSR_beta + TBO prefill = 1335/6.40/156/7009/0.9386 (1/4 gates, interact gap 5.5%).
