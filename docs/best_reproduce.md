@@ -1,25 +1,83 @@
-# DSR1 CONC=4 — Current Best: DEC-075 (self-contained reproduction)
+# DSR1 CONC=4 — Current Best: **DSR_beta + Phase 3 sync-fuse** (1361/6.35)
 
-**Last updated**: 2026-04-17 evening (DEC-075 drafter FP4 transplant + full profile investigation)
+**Last updated**: 2026-04-18 12:45 UTC
 
-> **🚨 FINAL PUSH MODE**: Block 3 / Kimi / May 15 horizon DROPPED. Mission: 4/4 CONC=4 gates by Apr 18 night or submit sub-rank. Next attempt: tree speculation (drafter cheap enough at DEC-075 to justify it).
+## 🏆 CURRENT BEST FLOOR — locked + reproducible
 
-## Current best floor: DEC-075 (LANDED, reproducible)
+| Metric | Value | Gate | Status |
+|---|---|---|---|
+| **Thr/GPU (÷4)** | **1361** | ≥1500 | ❌ −9% |
+| **Median TPOT** | **6.35 ms** | — | (TPOT gate 4.52 for E2E) |
+| Mean TPOT | 6.10 ms | — | — |
+| **Median ITL** | 16.29 ms | — | — |
+| **Interactivity** | **157.55** | ≥165 | ❌ −5% (narrowed from −10% at DEC-075) |
+| **Median E2E** | **6842 ms** | ≤5000 | ❌ +37% |
+| **GSM8K** | **0.934** | ≥0.93 | ✅ |
+| **Gates** | **1/4** | 4/4 | GSM8K only |
 
-| Metric | LANDED (162646) | REPRO (174928) | Gate | Status |
-|---|---|---|---|---|
-| **Thr/GPU (÷4)** | **1297** | **1278** | ≥1500 | ❌ −14% |
-| **Median TPOT** | **6.54 ms** | **6.74 ms** | — | — |
-| Mean TPOT | 6.39 | 6.43 | — | — |
-| **Median ITL** | 16.5 | 16.46 | — | — (MTP=3 burst ✓) |
-| **Interactivity** | **153** | **148** | ≥165 | ❌ −10% |
-| **Median E2E** | **7056** | **7253** | ≤5000 | ❌ +45% |
-| **GSM8K** | **0.9454** | ≥0.93 | ✅ +1.5 pp |
-| **Gates** | **1/4** | 1/4 | 4/4 | GSM8K only |
+**Full JSON**: `dsr_beta/bench_results/CURRENT_BEST_1361_6p35.json`
 
-**Binding gate math**: E2E ≤ 5000 → TPOT ≤ 4.52 ms. Need −33% from 6.74 ms.
+## Current best config (DSR_beta stack)
 
-**Run-to-run variance**: ±3% on TPOT/thr is normal. Both runs are within noise — DEC-075 is stable.
+| Component | Value |
+|---|---|
+| Docker image | `rocm/atom-dev@sha256:52c5195a712b5d3a0993d5e63de9b8ffc13a77d0c4b2f31d40afe9e62c12ab5f` |
+| ROCm | 7.2.2 |
+| PyTorch | 2.10.0+rocm7.2.2.git40d237bf |
+| aiter | commit `73ad0023e15e9735b3af95b3357b99cf7f801bf1` (main) |
+| ATOM | commit `f8453e3fc0f65191fb2034602dc9a2066a78020b` (main) |
+| flydsl | 0.1.3.1 |
+| triton | 3.5.1 |
+| Container | `danish_atom_dsr_beta` port 8890 |
+| Model | `/projects/teamA/danish/models_merged/DSR1-drafter-FP4` (DEC-075 merged checkpoint) |
+
+## Required local patches (3)
+
+1. `rejection_sampler.py`: `RELAXED_TOP_N = 8`, `RELAXED_DELTA = 0.5` (was 10, 0.6)
+2. `attention_mla.py`: `num_kv_splits=None` (was 16)
+3. **Phase 3 sync-fuse** — `model_runner.py`: merge `send_mtp_status_to_cpu_async` rejected+bonus tensors into single stacked tensor. Patch script: `dsr_beta/scripts/phase3_patch.py`
+
+## Required env vars + flags
+
+```bash
+export HIP_FORCE_DEV_KERNARG=1
+export NCCL_MIN_NCHANNELS=16
+export ATOM_DUAL_STREAM_MOE_TOKEN_THRESHOLD=1024
+export ATOM_ENABLE_RELAXED_MTP=1
+export HIP_VISIBLE_DEVICES=0,1,2,3
+
+python3 -m atom.entrypoints.openai_server \
+  --model /projects/teamA/danish/models_merged/DSR1-drafter-FP4 \
+  --server-port 8890 -tp 4 \
+  --kv_cache_dtype fp8 \
+  --method mtp --num-speculative-tokens 3 \
+  --max-model-len 10240 \
+  --gpu-memory-utilization 0.85 \
+  --enable-tbo prefill
+```
+
+## Gains vs DEC-075 production floor (1278/6.74/148/7253)
+
+| Metric | DEC-075 prod | Current best | Δ |
+|---|---|---|---|
+| Thr/GPU | 1278 | 1361 | **+6.5%** |
+| Median TPOT | 6.74 | 6.35 | **−5.8%** |
+| Interact | 148 | 157 | **+6.4%** |
+| Median E2E | 7253 | 6842 | **−5.7%** |
+
+**Binding gate math**: E2E ≤ 5000 → TPOT ≤ 4.52 ms. Need −29% from 6.35 ms. Gate-closing requires either kernel work (not available in 24h) or algorithmic change (tree spec, blocked by MLA kernel qseqlen≤4 on gfx950 FP8).
+
+## Patches in progress (Apr 18)
+
+See `dsr_beta/MASTER_PLAN.md` + `memory/project_PATCH_LIST_breakthrough_apr18.md`:
+- **Patch #5** setperfdeterminism 2400: applied, SCLK 1406→2400 verified, but bottleneck NOT compute-bound at CONC=4, no TPOT gain (may help at CONC=128)
+- **Patch #1** AITER PR #2622 MoE tiles: IN TEST (5 CSV lines swapped, server booting)
+- **Patch #6** TBO all + MORI_SHMEM_MODE=ISOLATION: pending
+- **Patch #2** ATOM ds_mtp1 branch (MTP cuda graph fix): pending
+- **Patch #3** ATOM ds_prefix_cache: pending
+- **Patch #4** MLA flatten fix port: pending
+
+## Historical (pre-DSR_beta) — DEC-075 reference
 
 ## DEC-075 = DEC-073 + merged checkpoint with drafter MoE layer 61 swapped to FP4
 
