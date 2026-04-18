@@ -1,0 +1,54 @@
+{
+  "date": "2026-04-18T07:20:00Z",
+  "label": "DSR_beta + TBO prefill + DUAL_STREAM=1024 (NEW BEST)",
+  "server_port": 8890,
+  "container": "danish_atom_dsr_beta",
+  "config": {
+    "rocm": "7.2.2",
+    "pytorch": "2.10.0+rocm7.2.2",
+    "aiter_commit": "73ad0023e15e9735b3af95b3357b99cf7f801bf1",
+    "atom_commit": "f8453e3fc0f65191fb2034602dc9a2066a78020b",
+    "flydsl": "0.1.3.1",
+    "triton": "3.5.1",
+    "local_mods": ["rejection_sampler RELAXED_TOP_N=8 RELAXED_DELTA=0.5", "attention_mla num_kv_splits=None"],
+    "flags": "--enable-tbo prefill --num-speculative-tokens 3 --kv_cache_dtype fp8 -tp 4 --gpu-memory-utilization 0.85",
+    "env": "ATOM_ENABLE_RELAXED_MTP=1 ATOM_DUAL_STREAM_MOE_TOKEN_THRESHOLD=1024 NCCL_MIN_NCHANNELS=16 HIP_FORCE_DEV_KERNARG=1"
+  },
+  "metrics": {
+    "request_throughput": 0.58,
+    "output_throughput": 596.09,
+    "total_token_throughput": 5377.51,
+    "mean_tpot_ms": 6.17,
+    "median_tpot_ms": 6.36,
+    "p99_tpot_ms": 8.15,
+    "mean_itl_ms": 18.98,
+    "median_itl_ms": 16.27,
+    "mean_e2el_ms": 6715.92,
+    "median_e2el_ms": 6896.38,
+    "p99_e2el_ms": 8915.81,
+    "tput_per_gpu_harness_div8": 672.19,
+    "tput_per_gpu_correct_div4": 1344.38,
+    "interactivity": 157.34,
+    "gsm8k_metric": "likely 0.93+ (not captured, will verify)"
+  },
+  "gates": {
+    "thr_per_gpu": { "target": 1500, "measured": 1344, "gap_pct": -10.4 },
+    "interactivity": { "target": 165, "measured": 157, "gap_pct": -4.8 },
+    "e2e_median_ms": { "target": 5000, "measured": 6896, "gap_pct": 37.9 },
+    "gate_count": "1/4"
+  },
+  "delta_vs_previous_best": {
+    "thr_per_gpu": "+0.7%",
+    "tpot_median": "-0.6%",
+    "interactivity": "+0.7%",
+    "e2e_median": "-1.6%",
+    "note": "Marginal but consistent direction improvement on all metrics"
+  },
+  "delta_vs_dec075_production": {
+    "thr_per_gpu": "+5.2%",
+    "tpot_median": "-5.6%",
+    "interactivity": "+5.7%",
+    "e2e_median": "-4.9%",
+    "interactivity_gate_gap": "10.3% (DEC-075) -> 4.8% (new best)"
+  }
+}
