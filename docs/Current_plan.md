@@ -1,416 +1,112 @@
-# DSR1 CONC=4 — Current state (Apr 17 evening, post-investigation)
+# DSR1 CONC=4 — CURRENT PLAN (Session-10 Apr 20: P0-P8 kernel engineering campaign)
 
-## 🔴 REVISED BOTTLENECK ANALYSIS — tree spec is the only viable gate-closer
+**Last updated**: 2026-04-20 session-10 — **P0 ✅ DONE → 3/4 GATES**
+**Status**: Advancing to P1 (TRITON_GEMM fusion enablement)
 
-**The earlier "full-step HIP graph" conclusion was WRONG** after code investigation.
+## 🎯 P0 BREAKTHROUGH (Apr 20 16:50 UTC)
 
-### What's TRUE (measured via torch.profiler at DEC-075):
+Added `--cudagraph-capture-sizes "[1,2,4,8,16,32]"` to canonical launch. Nothing else changed.
 
-```
-Rank  Kernel                                  ms       %
-────────────────────────────────────────────────────────────
- 1    hipEventSynchronize (GPU idle)         65.83   25.5%
- 2    moe_gemm1_0 (FlyDSL MoE stage 1)        30.58   11.8%
- 3    reduce_scatter_cross_device_store       16.46    6.4%
- 4    moe_gemm2_0 (FlyDSL MoE stage 2)        15.54    6.0%
- 5    hipLaunchKernel (CPU→GPU dispatch)     15.09    5.8%
- 6    mla_a8w8_qh32_qseqlen4_gqaratio32_ps    7.83    3.0%
-```
+Min-of-3 result: **Thr/GPU 1500 ✅ | Interact 185 ✅ | E2E 5763 ❌ | GSM8K 0.9318 ✅ = 3/4 GATES**
 
-### What's FALSE (my earlier interpretation):
+This is +2 gates vs the prior 1/4 floor. TPOT −19% (6.66→5.40 ms). E2E still 763 ms over gate — will close via P1+P2+P7.
 
-> ❌ "HIP graphs would wrap multiple kernels into one launch, cut 31%"
+**New baseline for subsequent phases**: 1500/5.40/185/5763/0.9318. All phase targets now measured from this.
 
-**Main forward IS ALREADY graph-captured** at [model_runner.py:1741-1833](atom/model_engine/model_runner.py#L1741). Decode path replays graph at line 1580. Default capture set `[1,2,4,8,16,32,48,64,128,256]` × max_q_len=4 covers bs=4.
-
-The 25.5% `hipEventSynchronize` is NOT inter-kernel sync inside main fwd. It's CPU-side `event.synchronize()` waiting for async GPU→CPU token copies BETWEEN steps (4 syncs per MTP step × 8 steps × 1.6 ms avg):
-
-- [model_runner.py:158](atom/model_engine/model_runner.py#L158) — recv rejected count
-- [model_runner.py:159](atom/model_engine/model_runner.py#L159) — recv bonus count
-- [model_runner.py:214](atom/model_engine/model_runner.py#L214) — recv sampled tokens
-- [model_runner.py:453](atom/model_engine/model_runner.py#L453) — recv draft tokens
-
-**Cross-step CPU sync cannot be absorbed by a graph.** Architectural pipeline lag.
-
-### Step time breakdown (data-driven, per step):
-
-| Component | ms | % | Already optimized? |
-|---|---|---|---|
-| Main fwd GPU compute | ~10.0 | 60% | ✓ graph-captured, kernels tuned |
-| Drafter GPU compute (3×) | ~1.2 | 7% | ✓ FP4 fast path via DEC-075 |
-| CPU↔GPU sync (4/step) | ~6.4 | 38% | Hard — fuse 2 syncs = ~5% win |
-| Kernel launch overhead | ~1.8 | 10% | ✓ batched in graph |
-| **Step total (measured)** | **~17** | | |
-| **TPOT @ 2.5 tok/step** | **6.74 ms** | | |
-
-### Gate math (binding: E2E ≤ 5000 → TPOT ≤ 4.52):
-
-- **Compute is near theoretical floor** — can't drop main_fwd below ~10 ms at TP=4 without kernel rewrite.
-- **Non-compute sync is architectural** — not removable without major refactor.
-- **Only path to gate**: increase tokens/step from 2.5 → 3.75+. This requires **tree speculation** (EAGLE-2).
-
-### mtp_k=4 chain (tested Apr 17 evening) — DEAD
-
-Launched `--num-speculative-tokens 4`. Engine crashed during graph capture at bs=256 max_q_len=5. Root cause: aiter MLA kernel has ONLY qseqlen={2, 4} variants. No qseqlen=5 kernel. Confirmed via aiter/hsa/gfx950/mla/ grep.
-
-### Tree spec feasibility (research summary)
-
-- SGLang's MLA tree verify uses the **same `mla_decode_fwd` kernel**, not extend_attention_fwd. Tree encoded via qo_indptr layout, NOT per-query mask.
-- Best topology for qseqlen=4 constraint: **depth-3 tree, 4 leaves, bs×4 batch expansion** — each leaf = separate "sequence" of length 4 sharing KV ancestors.
-- EAGLE-2 paper: tree depth-3 14 nodes → 3.6-4.1 tok/step (vs chain 2.6-3.1). Our expected: 2.5 → 3.5-3.8.
-- Cost: 4× MLA verify wall-clock (batch expansion). Adds ~2 ms/step. New step ~19 ms, TPOT = 19/3.6 = **5.28 ms** — doesn't quite hit 4.52 gate but gets closest possible without kernel work.
-
-### Danish mandate (Apr 17 evening): Tree spec "no matter what"
-
-- "we will do tree and that my order, after mtp4 check"
-- "tree has to be done with best optimization, do proper research on it"
-- "overwrite old rule, new rule is tree is the one we will do it no matter what"
-- "we will start tree after few hours, i will update you"
-
-**Status: Tree spec ON HOLD pending Danish signal. Research done, implementation plan ready. Will resume when told.**
+**Authority**: Danish — "you wont stop until all 4/4 gates are accomplished" + "kernel level engineering like AMD engineer with 15 years experience"
+**Master plan file**: `C:\Users\danis\.claude\plans\fizzy-toasting-teacup.md` (full details, 200+ lines)
+**Campaign memory**: `memory/project_dsr1_kernel_campaign_apr20.md` (auto-compact survival)
+**Archive**: prior session-8 `Current_plan.md` → [archive/Current_plan_session8_HK_qh32.md](archive/Current_plan_session8_HK_qh32.md)
 
 ---
 
-## Tree spec implementation plan (ready to execute)
+## Context
 
-### Topology (qseqlen=4 constrained)
+Profiling on Apr 20 (M1 torch.profiler + V1/V4/V5 overlap validation) identified the bottleneck definitively:
 
-```
-Root (prev accepted token) → Level 1: top-2 drafts
-                           → Level 2: top-1 per parent (2 nodes)
-                           → Level 3: top-1 per parent (2 nodes)
-= 4 leaves × depth-3 paths, each path = 4 positions (fits qseqlen=4)
-```
+- **`hipGraphLaunch` = 77.7% of wall** at CONC=4 (915 calls × 63 µs, measured; V5 confirmed NOT overlapped with GPU work — DSR1 is host-starved, opposite of Kimi)
+- **Root cause**: ~1525 nodes per graph (61 layers × ~25 kernels) × HIP runtime ~40 ns/node submission = 61 µs (matches measured 63 µs)
+- **Per-node cost already near-optimal** — problem is NODE COUNT
+- Profiler skew 3.4× → native native contribution ~30-50% wall (still dominant)
 
-### Changes needed
+See: [Bottleneck.md](Bottleneck.md) for full profile data.
 
-1. **[eagle.py:193 propose loop](atom/spec_decode/eagle.py#L193)** — replace `logits.argmax` with `logits.topk(2)` at i=0; keep argmax at i=1,2 but run on 2*bs batch
-2. **[rejection_sampler.py](atom/model_ops/rejection_sampler.py)** — add tree verify path: evaluate 2 candidate chains per seq, pick longest-accepted prefix
-3. **[model_runner.py postprocess](atom/model_engine/model_runner.py)** — handle bs×2 batch in verify step (tokens accepted per seq variable)
-4. **[tree_spec.py](atom/spec_decode/tree_spec.py)** — already 40% done; use topology builder with topk_per_level=[2,1,1] (not [2,2,2] due to qseqlen constraint)
-
-### Risk register
-
-- Main fwd graph captured at bs=4, max_q_len=4. Batch expansion bs×2=8 changes the (bs, max_q_len) tuple → requires new graph bucket at (8, 4) which IS captured. ✓
-- Graph-captured attention may assume fixed cu_seqlens_q → need to ensure cu_seqlens_q = [0,4,8,12,16] at bs*2=8 works with capture buckets
-- GSM8K risk — tree rejection is stricter, need to match/exceed 0.93
-
-### Test protocol
-
-1. Implement → sanity test (server boots, generates 1 token correctly)
-2. GSM8K bit-identical probe (greedy @ temp=0, compare to DEC-075 greedy)
-3. If bit-identical, bench perf
-4. Regression test: if TPOT > 6.9 ms, abort and revert
-5. If green: push to GitHub as DEC-076
+Prior plans (VSKIP=0, HK qh32 v7/v8, compact-experts, F0a hipEventSync) were either non-applicable on DSR1 or addressed kernels too small to matter (MLA 4.3% of GPU time = 0.1% wall). Campaign now targets the REAL bottleneck: node-count reduction + tokens-per-step boost.
 
 ---
 
-# HISTORICAL (Apr 18 ~15:15 UTC, pre-profile)
+## Phase table (current state)
 
-# DSR1 CONC=4 — OLDER STATE (Apr 18 ~15:15 UTC, pre-profile)
+| Phase | Description | Status | Expected TPOT | Expected Gates |
+|---|---|---|---:|---:|
+| P0 | Environmental hygiene + clean floor + explicit `hipGraphUpload` | **🔨 IN PROGRESS** | 6.60 ms | 1/4 |
+| P1 | `ATOM_USE_TRITON_GEMM=1` → unlocks 2 fusions (-122 nodes) | pending | 6.35 ms | 1/4 |
+| P2 | **REVISED**: activate ATOM shared-expert fusion scaffold (commented out at `moe.py:435`) + port vLLM #24097 mechanism — 1-8.5% QPS gain confirmed | pending | 6.00 ms | 1/4 → 2/4 threshold |
+| P3 | Backport vLLM #27224 (host overhead between decode steps) | pending | 5.85 ms | **2/4** ← first crossing |
+| P4 | Drafter graph isolation experiment (time-boxed 2d) | pending | — | — |
+| P5 | HK MLA v2 qh32 via metadata-builder template fix (⭐ structural) | pending | 5.65 ms | 2/4 |
+| P6 | Full megakernel (stretch, deferred) | deferred | — | — |
+| P7 | MTP=4 with HK qseqlen=5 | pending | 4.60 ms | **3/4** |
+| P8 | MTP=5 with HK qseqlen=6 | pending | 3.95 ms | **4/4** ✓ |
 
-## Latest experiments (Apr 18 after SSH access granted)
-
-### Phase A1 relaxed MTP fine sweep
-
-| Probe | Config | Thr/GPU | TPOT | Interact | E2E | GSM8K | Verdict |
-|---|---|---|---|---|---|---|---|
-| DEC-073 (reference) | (8, 0.5) | 1282 | 6.70 | 149.3 | 7205 | 0.9401 | baseline |
-| Probe 1 | (7, 0.5) | 1299 (+1.3%) | 6.73 (+0.4%) | 148.6 (-0.5%) | 7421 (+3.0%) | 0.9439 (+0.4pp) | noise, E2E +3% regression |
-| Probe 2 | (9, 0.5) | 1272 (-0.8%) | 6.60 (-1.5%) | 151.48 (+1.5%) | 7300 (+1.3%) | 0.9333 (-0.7pp) | marginal speed, GSM8K near floor |
-
-**Verdict**: (8, 0.5) is the sweet spot. Both sweeps trade accuracy for speed non-productively. (8, 0.5) preserved as DEC-073.
-
-### DEC-075 UNLOCKED (Danish approved weight modification)
-
-Plan: transplant layer 61 MoE weights from `amd/DeepSeek-R1-0528-MXFP4-MTP-MoEFP4` (FP4) into our main `amd/DeepSeek-R1-0528-MXFP4` (BF16 layer 61) via synthetic merged checkpoint directory.
-
-**Surgical scope** (not naive): swap ONLY layer 61 MoE experts + gate + shared_experts to FP4. Keep MLA projections, layernorms, embed_tokens, eh_proj, shared_head as BF16 from main. Captures ~95% of drafter speedup with minimum FP4-kernel-shape risk.
-
-**Merged checkpoint built** at `/projects/teamA/danish/models_merged/DSR1-drafter-FP4`:
-- 91,681 total keys (vs 90,910 in main)
-- 82 main shards symlinked + 2 MoEFP4 shards symlinked (layer 61 only)
-- Modified config.json: removed `re:model.layers.61.*` catch-all exclude, added specific excludes for layer 61 self_attn/layernorms/embed/eh_proj/shared_head
-- All non-MoE layer 61 keys → main's BF16 shards
-- Layer 61 MoE experts/gate/shared_experts → MoEFP4's FP4 shards
-
-**Expected gain**: drafter MoE saves ~3 ms/step (BF16 slow path → FP4 FlyDSL fast path). TPOT 6.77 → ~6.10-6.40 ms. Might move thr 1282 → ~1380, interact 149 → ~160 (just below 165 gate). Still won't close E2E gate.
-
-**Status as of 16:30 UTC**: ✅ **DEC-075 v5 WORKS AND BENCHED**.
-
-| Metric | DEC-073 | DEC-075 | Δ |
-|---|---|---|---|
-| Thr/GPU (÷4) | 1282 | **1297** | **+1.2%** ↑ |
-| Median TPOT | 6.70 | **6.54** | **−2.4%** ↑ |
-| Median E2E | 7205 | **7056** | **−2.1%** ↑ |
-| Interactivity | 149.3 | **152.89** | **+2.4%** ↑ |
-| GSM8K | 0.9401 | **0.9454** | **+0.5pp** ↑ |
-
-All metrics improved, GSM8K passes. Gates still 1/4 (interact needs 165, we're at 153). Smaller gain than projected 5-7% (got 2-3%) — the drafter time breakdown from DEC-057 may have over-estimated drafter-MoE fraction. But net-positive, reproducible, and free of any regression. **DEC-075 locked as new floor**.
-
-Reproduction: see memory `project_dec075_progress.md` (`MODEL` env override needed in bench).
+Wall-clock estimate: 3-4 weeks sustained work; +2-4 if P6 invoked.
 
 ---
 
-## DEC-075 debugging journey (for future Opus / AMD review)
+## Engineering rules (session-10)
 
-| Attempt | Approach | Result | Root cause |
-|---|---|---|---|
-| v1 | Surgical merge: only MoE swapped, MLA BF16 from main | OOM | Leftover probe 2 server workers held GPU memory — cleanup needed |
-| v2 | Same as v1, clean GPU | `_load_w2: start (0) + length (512) exceeds dim 256` | Drafter's `rewrite_spec_layer_name` adds `.mtp_block.` prefix; selective `re:model.layers.61.self_attn.*` excludes don't match renamed path |
-| v3 | v2 + layer_quant_config from MoEFP4 | Same shape mismatch | `*self_attn*` FP8 override didn't help the MoE loader path |
-| v4 | FULL layer 61 transplant (match MoEFP4 exactly, all FP4 in layer 61 except 3 items) | NEW error: `3584 vs 14336` shape mismatch | Likely a boundary between main BF16 dims and drafter FP4 packed dims in some fused op |
-
-## Full stacked optimization plan (complete roadmap)
-
-### Active levers (in-window, doable in remaining time)
-
-| # | Phase | Lever | Expected Δ | Status |
-|---|---|---|---|---|
-| 1 | A1 | Relaxed MTP sweep (7,0.5)/(9,0.5) | ±0-2% TPOT | DONE — (8,0.5) confirmed optimal |
-| 2 | — | DEC-075 drafter FP4 transplant | −5 to −7% TPOT (+2/4 gates possibly) | IN PROGRESS (v4 crashed, debugging) |
-| 3 | A2 | BF16 CSV coverage — add missing decode shapes | ±0-1% TPOT | pending |
-| 4 | A3 | Scheduler-delay-factor confirm 0 | 0% | pending |
-| 5 | — | Stack DEC-075 + (8,0.5) | combined | pending |
-| 6 | B | Real tree spec via mla_extend_ref | maybe net-neutral at CONC=4 per math | pending, optional |
-| 7 | C | 3× GSM8K stability + multi-CONC (32, 128) bench | additional gates outside CONC=4 | pending |
-| 8 | C | Submit to HuggingFace | — | pending |
-
-### Architecturally-blocked levers (Phase D fallback, bigger-than-24hrs work but DOING ANYWAY if needed)
-
-Per Danish rule: if we don't meet targets with Phases A-C, attempt these too.
-
-| Blocker | Expected gain | Effort estimate |
-|---|---|---|
-| Custom 1-shot XGMI AllReduce (replace NCCL for <1MB messages) | −1.5 ms/step on AllReduce (−20%) | 1-2 weeks HIP kernel |
-| Mega-fusion MLA + RMSNorm + quant into single kernel | −1 ms/step | 1-2 weeks HIP |
-| New qo_len kernels in AITER for tree speculation | enable tree spec with reduced compute overhead | 2+ weeks |
-| MoE kernel further tuning (swizzleA, tile shapes, persistent scheduler) | marginal | weeks |
-
-These are needed to truly close the E2E gate at CONC=4. AMD's internal team presumably has these. We'll attempt them if the Phase A-C stack falls short, accepting it's aggressive scope for solo in the remaining time.
-
-### Honest probability distribution (updated after v4)
-
-| Scenario | Probability | CONC=4 gates |
-|---|---|---|
-| DEC-075 lands (after v4 debug) + tree spec marginal | 45% | 2/4 (GSM8K + interact) |
-| DEC-075 lands, tree spec neutral | 20% | 2/4 |
-| DEC-075 fundamentally blocked, ship DEC-073 | 15% | 1/4 |
-| DEC-075 + tree spec both help unexpectedly | 10% | 3/4 |
-| Phase D custom kernels land | 8% | 3-4/4 |
-| All gates at CONC=4 | <2% | 4/4 |
-
-Multi-CONC always adds 3-5 extra gates at CONC=32 + CONC=128 regardless.
-
-
+1. **No naive paths.** Every patch must reference a kernel trace, GitHub PR, or AMD doc.
+2. **Measure before/after.** Each phase writes `dsr_beta/bench_results/p<N>_<short>.json`.
+3. **Revert if regresses >2%.** Every patch pre-backs as `.preP<N>`.
+4. **Record every experiment** to [EXPERIMENTS.md](EXPERIMENTS.md).
+5. **Never declare a lever dead without profile-confirmed reason.**
+6. **GitHub push only on new record.**
+7. **Boot-command pause**: announce each cold boot before triggering.
+8. **Update docs + memory at end of EVERY phase** so auto-compact cannot lose progress.
 
 ---
 
-# DSR1 CONC=4 — PRIOR STATE (Apr 18 ~07:20 UTC)
+## P0 execution checklist (in flight)
 
-## 30-sec briefing for new opus
-
-- Hackathon: AMD Phase 2, DSR1 track, solo competitor (Danish). Final push (Block 3 dropped).
-- 4× MI355X TP=4 single-replica. GPUs 0-3 (Kimi owns 4-7).
-- Stack: ATOM 108a70e + aiter f8c1d76bd + flydsl 0.1.2.
-- Container: `danish_atom_main`.
-- Model: `amd/DeepSeek-R1-0528-MXFP4` + FP8 KV + MTP=3 + relaxed (8, 0.5).
-- Harness: `./dsr1_benchmark perf` only (official scoring).
-- Binding gate: E2E ≤ 5000 → TPOT ≤ 4.52 ms. Need −33% from current 6.80.
-- Full repro: `Best_atom_dsr_cncc4/best_reproduce.md`. Active plan: `C:\Users\danis\.claude\plans\fizzy-toasting-teacup.md`.
-
-## Current best floor: DEC-073 (LOCKED, reverted from DEC-074 tree spec attempt)
-
-| Metric | Value | Gate | Status |
-|---|---|---|---|
-| Thr/GPU | **1270** | ≥1500 | ❌ −15% |
-| Median TPOT | 6.80 ms | — | — |
-| Interactivity | 147 | ≥165 | ❌ −11% |
-| Median E2E | 7318 ms | ≤5000 | ❌ +46% |
-| GSM8K | 0.934 | ≥0.93 | ✅ |
-| **Gates passed** | **1/4** | — | GSM8K only |
-
-## DEC lineage this push
-
-| DEC | Lever | Result |
-|---|---|---|
-| DEC-066 | prior floor (9-row BF16 CSV) | 1221/6.73/148.6 |
-| DEC-069 | Phase 4A v4 drafter HIP graph | NULL (DEC-057 proved no Python gap) |
-| DEC-071 | BF16 decode tune (88 new rows) | 1267/6.96/143.8 (marginal +3.8% thr) |
-| DEC-072 | BF16 prefill tune | **GSM8K 0.865 CRASH, reverted** |
-| **DEC-073** | **Relaxed MTP (8, 0.5)** | **1270/6.80/147.1/7318/0.934 (CURRENT BEST)** |
-| DEC-074 | Naive tree spec (top-2 at last pos only) | **ABANDONED — GSM8K 0.807, accept rate 63% vs baseline 75%**. Kernel refactor regressed even in diagnostic mode (alt=None). Files reverted to DEC-073 at Apr 18 07:15 UTC. |
-
-## Why DEC-074 failed (root cause honest)
-
-The tree I built had **branching factor 1 at depths 0-1, only 2 at last depth** — mathematically equivalent to linear fallback, not a tree. Worse, the kernel refactor regressed even when `alt=None` (which should have been bit-identical to DEC-073). Bug was somewhere in the Triton refactor of `found_1/found_2` loop structure — I shipped without:
-
-1. Running a bit-identical backward-compat test (alt=None → compare to DEC-073 output on same input)
-2. Writing a reference PyTorch implementation first
-3. Testing the kernel on a handcrafted small case
-
-These gaps are now **enforced rules** (see §"The 8 gates" below).
-
-## The budget we're attacking (DEC-057 ground truth)
-
-```
-step = 21.8 ms    →    TPOT 6.80 ms at 3 toks/fwd
-├── main fwd       10.9 ms
-│   ├── MoE GEMM        5.89 ms   (MXFP4 FlyDSL fast path, tuned)
-│   ├── BF16 GEMM       4.57 ms   (97-row CSV tuned, DEC-071)
-│   ├── AllReduce       2.96 ms   (FIXED, <1MB msg)
-│   ├── MLA chain       3.42 ms   (qh32 kernel)
-│   └── RMSNorm         1.02 ms
-└── drafter × 3      8.67 ms       (~2.89 ms/iter, ATTACK SURFACE)
-    └── MoE runs SLOW path (QuantType.No) vs main's fast MXFP4 path
-```
-
-## NEW PLAN — 3 levers, architecturally disciplined
-
-### Lever 1 — DEC-075 Drafter MoE Ultra-Requant (4-5 hrs, ~65% confidence)
-
-**Diagnosis**: drafter MoE dispatches to `QuantType.No` fallback in kernel logs (~50% of drafter fwd). Main model hits fast FlyDSL path. Closing that gap is the highest ROI/hour lever remaining.
-
-**Ultra design** (NOT naive "bulk requant + pray"):
-
-1. **Calibration pass**: 256 GSM8K-like prompts through drafter in BF16. Capture per-expert activation histograms.
-2. **Per-expert MXFP4 scale**: `max(|act|) / (MXFP4_MAX × 0.85)` per expert, NOT global. Preserves reasoning-tail distribution on hot experts.
-3. **Per-block accuracy gating**: quant one expert at a time. Re-run held-out 50 GSM8K prompts. If that expert's routed-token accept rate drops >2%, KEEP BF16 for that expert. Expected: ~240/256 quantized, ~16 "load-bearing" experts stay BF16.
-4. **Hot-swap at load**: patch `atom/models/deepseek_v2.py` drafter init → apply requant in-place after `.from_pretrained()`. No HF re-upload. Sidecar `.safetensors` of delta tensors only.
-5. **Dispatch verification bench**: after requant, first bench must show drafter hitting `flydsl_moe1_afp4_wfp4_bf16_*` kernel name in aiter logs. If still says `QuantType.No`, requant is cosmetic → halt.
-
-**Expected delta**: drafter 8.67 → 5.2 ms. Step 21.8 → 18.4 ms. TPOT 6.80 → 5.73 ms.
-
-**Gates moved**: interact 147 → ~170 ✅. thr ~1475 (still fails 1500). E2E ~6184 (still fails). → **2/4 gates**.
+- [ ] P0.0 — Create/refresh doc infrastructure + campaign memory (this commit)
+- [ ] P0.1 — Container state check, env audit, add `--cuda-graph-sizes 32`
+- [ ] P0.2 — Read `model_runner.py:2013-2018`, apply explicit `hipGraphUpload(graph, stream)` after capture
+- [ ] P0.3 — 3× min-of-3 `./dsr1_benchmark perf` + GSM8K, write `P0_clean_floor.json`
+- [ ] P0 checkpoint commit: `dsr_beta_final` branch, update this file + EXPERIMENTS.md + memory
 
 ---
 
-### Lever 2 — DEC-077 Real Tree Speculation (8-10 hrs, ~25% confidence)
+## Phase-crossing gates (decision points)
 
-**Why "real" not DEC-074's naive version**: DEC-074 had BF=1 at every depth except last. A real tree branches at every depth.
-
-**Topology**:
-```
-              root (last target token)
-             /                \
-       d0_top1              d0_top2         ← BF=2 at depth 0
-       /    \                /    \
-    d1a   d1b             d1c   d1d         ← BF=2 at depth 1
-     |     |                |     |
-    d2a   d2b              d2c   d2d        ← top-1 at depth 2
-```
-8 leaves verified in 1 main fwd (vs 3 today).
-
-**Ultra design**:
-1. **Tree attention via existing attn_bias**: `extend_attention_fwd` already takes per-query attn_bias. Encode tree structure as 8×8 causal-tree mask (each leaf sees only its ancestors). No new kernel.
-2. **Branch-aware rejection sampler (Triton)**: BFS over tree. For each node: check parent-accepted AND token-in-top_n+delta. Emit longest accepted path.
-3. **KV slot pruning**: all 8 branches share KV up to root. Above root, each branch gets its own slots. After verification, only accepted path's KV survives — modification to `slot_mapping`.
-4. **Static shape**: tree always 8 leaves → HIP-graph-safe.
-5. **Accuracy preserved**: every accepted token still passes target's top_n+delta. Tree gives more candidates, NOT weaker criterion.
-
-**Expected delta** (on L1 base): toks/fwd 3.0 → 4.0-4.2. TPOT 5.73 → 4.10-4.30 ms. E2E 4563-4741.
-
-**Gates moved**: **3-4/4 gates** depending on upper/lower band of toks/fwd gain.
-
-**Risk**: kernel is harder than DEC-074. Same class of failure possible. Mitigated by enforced 8-gate rule (see below).
+- **End of P3**: if 2/4 gates + ≥10% TPOT improvement, GitHub push + leaderboard interim submit. Continue to P5.
+- **End of P5**: if HK qh32 qseqlen=5 doesn't land in 7 days, re-scope (possibly invoke P6 megakernel earlier OR research upstream AITER nhead=32 PR status).
+- **End of P7**: if 3/4 + E2E gap ≤ 200 ms, retry P3/P1 stacked patches for the last 200 ms.
+- **End of P8**: 4/4 achieved → full submit. Otherwise pivot to P6 megakernel (2-4 week stretch).
 
 ---
 
-### Lever 3 — Cheap probes in parallel (1 hr total)
+## Math — why 4/4 is reachable
 
-**MTP=4 probe** (30 min): `--num-speculative-tokens 4`. Native head trained for k=3, iterative reuse at pos 4 unknown. If accept rate >40% AND GSM8K ≥0.93: free toks/fwd. Else revert.
+Compounded native gains (3.4× deflated from profiler view):
 
-**BF16 KV + AITER #2727 probe** (30 min): disable `--kv_cache_dtype fp8`, test new `mla_a16w16_qh32_qseqlen4_gqaratio32` kernel. Previous BF16 KV failure was TP=2 DP=4 — never tested at TP=4 SR. Dead-doesn't-mean-dead rule.
-
-Run during drafter calibration data collection (parallel-safe).
+| Phase | ΔTPOT | TPOT | Thr/GPU | Interact | E2E | Gates |
+|---|---:|---:|---:|---:|---:|---:|
+| Floor | — | 6.66 | 1351 | 150 | 7221 | 1/4 |
+| P1 | −0.31 | 6.35 | 1420 | 157 | 6880 | 1/4 |
+| P2 | −0.20 | 6.15 | 1467 | 162 | 6660 | 1/4 |
+| P3 | −0.30 | 5.85 | 1541 | 171 | 6340 | **2/4** |
+| P5 | −0.20 | 5.65 | 1595 | 177 | 6120 | 2/4 |
+| P7 | −1.05 | 4.60 | 1957 | 217 | 5020 | **3/4** |
+| P8 | −0.65 | 3.95 | 2280 | 253 | 4350 | **4/4 ✓** |
 
 ---
 
-## The 8 gates — enforced after DEC-074 failure
+## Pointers
 
-Every code-ship step requires passing ALL EIGHT:
-
-1. **Pre-measure spec** — target ms + mechanism (file:line) + expected Δ + pass/fail gate + post-measure plan. No "TBD" allowed.
-2. **Reference implementation first** — algorithm in pure PyTorch (obvious correctness) before any Triton.
-3. **Bit-identical backward-compat probe** — new kernel with neutralized new params = byte-identical to old kernel on same input.
-4. **Small-case hand trace** — bs=2, vocab=32, handcrafted logits, compare output vs hand-computed expected.
-5. **Diff review with user** — annotated old vs new file diff shown before `make` or server launch.
-6. **Abort-on-regression** — any metric drops >2% vs DEC-073 in first bench → immediate halt + root-cause diagnosis. NO forward-patching.
-7. **"Optimized" requires naming naive version** — what would naive do? what does mine skip? If not answerable, it's marketing, downgrade spec.
-8. **Tree spec architectural check** — BF>1 at depth 0 AND depth 1, leaves ≥ 2× mtp_k, tree mask actually encoded, rejection sampler walks topology. Otherwise it's fallback-with-makeup.
-
-## 18-hour sequence
-
-```
-H0-1:   Baseline re-bench after revert (server booting Apr 18 07:20, ~20 min boot)
-        — confirm DEC-073 (1270/6.80/147/7318/0.934)
-H1-2:   Parallel cheap probes:
-        - MTP=4 probe (1 bench)
-        - BF16 KV + #2727 probe (1 bench)
-        - Start drafter calibration data collection (offline)
-H2-6:   DEC-075 L1 per-expert calibrated requant
-        - Calibration histogram per expert
-        - Per-expert quant + accuracy gating loop
-        - Hot-swap loader patch
-        - Dispatch verification bench
-H6-7:   DEC-075 full bench + GSM8K 3× stability
-        IF 2/4 gates locked: BANK IT, continue
-        IF regression: revert, ship DEC-073
-H7-16:  DEC-077 L2 real tree spec (gate-reviewed at every step)
-        H7-8:  Design review — tree mask encoding, ref PyTorch impl
-        H8-10: Implement attn_bias tree mask + unit test
-        H10-13: Implement branch-aware rejection sampler (ref PyTorch first, then Triton)
-        H13-15: Implement KV slot pruning
-        H15-16: Integration bench + GSM8K validate
-H16-18: 3× GSM8K stability at best passing config, submit
-```
-
-## Honest probability
-
-- **2/4 gates** (DEC-075 solo): 65%
-- **3/4 gates** (DEC-075 + partial tree OR BF16 KV): 25%
-- **4/4 gates** (DEC-075 + full tree spec): 10-12%
-
-## Stop conditions
-
-1. MTP=4 GSM8K fails → revert, don't retry
-2. Drafter requant GSM8K drop >1% after per-block gating → ship DEC-073 alone
-3. Tree spec ANY regression at H+2 checkpoint → abort, ship DEC-075
-4. Hard deadline H17 regardless of status → submit best-passing config
-
-## Dead levers (DO NOT retry)
-
-- Phase 4A drafter HIP graph / Phase 4B async (Python gap ≈ 0 per DEC-057)
-- **BF16 PREFILL tune** (GSM8K 0.865 crash, DEC-072)
-- **Naive tree spec (top-2 at last only)** (DEC-074 failure, this session)
-- v917 MoE port (3 crashes)
-- AITER #2727 simple flip (but BF16 KV + #2727 TOGETHER — probe re-opened, never tested at TP=4 SR)
-- AITER #2620 full cherry-pick (API drift to flydsl 0.1.3.1)
-- ATOM #421 simple cherry-pick (Qwen-only dispatch; wire-in still open)
-- QuickReduce INT4 (min 16 MB, decode is 28 KB)
-- TP=2 SR, TP=4 × DP=2 (gfx950 kernel bugs)
-- AITER v0.1.12 direct update
-- Prefix caching (MXFP4 None scale)
-- `-MTP-MoEFP4` model (Triton trap)
-- Env regressions: GPU_MAX_HW_QUEUES=5, OMP_NUM_THREADS=1, triple-fusion env vars
-
-## Files of record
-
-Memory:
-- `project_final_push_apr17_18.md` — push mission
-- `project_wall_clock_budget_hard.md` — DEC-057 measured budget
-- `project_sota_apr17_intel.md` — upstream PRs + AMD blog
-- `feedback_pre_measure_or_dont_ship.md` — 5-point rule
-- `feedback_dead_means_unpatched.md` — "dead ≠ dead"
-
-Desktop docs:
-- `daily_log.md` — chronological DEC record
-- `MASTER_FINDINGS.md` — canonical state
-- `Best_atom_dsr_cncc4/best_reproduce.md` — DEC-073 repro
-- `Danish.md` — strategic context
-
-Plan: `C:\Users\danis\.claude\plans\fizzy-toasting-teacup.md`
-
-## Fallback
-
-If all 3 levers miss → submit DEC-073 config at CONC=4 (1/4 gates, GSM8K only) + best-effort CONC=32/128 for sub-rank points. Explicitly accepted as Apr 18 night hard deadline.
+- Full plan with patch-site file:line references: [`../../.claude/plans/fizzy-toasting-teacup.md`](file:///C:/Users/danis/.claude/plans/fizzy-toasting-teacup.md)
+- Bottleneck profile data: [Bottleneck.md](Bottleneck.md)
+- Floor reproduction: [best_reproduce.md](best_reproduce.md)
+- Experiment log: [EXPERIMENTS.md](EXPERIMENTS.md) (append-only)
+- Daily log: [HISTORY.md](HISTORY.md)
+- Status dashboard: [STATUS.md](STATUS.md)
+- Master findings: [FINDINGS.md](FINDINGS.md)

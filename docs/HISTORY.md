@@ -2304,3 +2304,483 @@ Key verify markers on boot log:
 - `Capturing bs=4, max_q_len=4` → mtp_k=3 ✓
 - `flydsl_moe1_afp4_wfp4_bf16_t32x32x256_w3_fq` at bs=4 → drafter FP4 fast path ✓
 
+
+## 2026-04-18 → 2026-04-19 — Session 7 (Forged multi-phase plan, Lever B/C explored, A1 in flight)
+
+### Floor confirmed (Apr 19 05:31 UTC)
+Post-revert of all session-7 experiments, bench: **1341 thr/GPU, 6.47 ms TPOT, 154.63 interact, 7009 E2E, 0.9356 GSM8K** → **1/4 gates** (GSM8K only). Within noise of locked `CURRENT_BEST_1361_6p35.json`. Floor preserved.
+
+### TP=8 data point (parked for CONC=32/128)
+TP=8 SR bench: **842 thr/GPU, 5.11 TPOT, 195.78 interact, 5511 E2E, 0.9303 GSM8K → 2/4 gates**. First config ever to pass interactivity (+19%). Thr crashes −44% because total tokens barely grow (+24%) but divisor doubles — launch-latency-bound. Parked for CONC=32/128 tracks, **not** CONC=4.
+
+### Patch #4 MLA flatten — DEAD on arrival
+Research-report flagged SGLang `1ad8a0d` (Apr 17 2026) as a flatten-elimination fix. Git-blame on `/app/ATOM/atom/model_ops/attention_mla.py` shows the equivalent pattern landed in **Oct-Dec 2025** (commits `a73f7bca`, `f58c89aa`, `958f0e6e`, `20165596`). Native path has had this optimization for months. 0 ms to port. PARKED.
+
+### Lever B (drafter HIP graph) — v1→v5 debug spiral, REVERTED
+Five versions attempted over ~3 hours, each exposing a new bug layer:
+
+| v | Bug | Fix | Outcome |
+|---|---|---|---|
+| 1 | `self.dtype` missing on ModelRunner | `self.config.torch_dtype` | v1 fixed |
+| 2 | Runtime shape 1526 > buf 1024 | Shape guard in dispatch | v2 fixed |
+| 3 | Shared graph_pool with main → memory aliasing | Drafter-isolated pool | v3 fixed |
+| 4 | Boot-time capture used main's qseqlen=4 metadata for step-1 (needs qseqlen=1) → OOB KV writes → crash on next prefill | Lazy capture inside propose() with runtime metadata | v4 fixed |
+| 5 | Worked 236k tokens + 404 captures, then bench #2 crashed on `layer.61.mlp.experts.moe_forward` | Sustained-load allocator state issue | **REVERTED** |
+
+Lesson: hand-rolled per-shape lazy-capture works at small scale but hits allocator cliffs at production scale. **Parked for B3 SGLang port** (uses pre-allocated boot-time capture with different buffer strategy).
+
+### Lever C (prefix-cache) — v1/v2 both crashed, REVERTED
+Reproduced the research's predicted crash: `--enable_prefix_caching` on boot → 1st prefill batch OK → 2nd prefill batch (req 88-91) → **Memory access fault on all 4 GPUs** at `gather_kv_b_proj`.
+
+Root cause: kernel has multiple baked assumptions for the FP8-quantized path. Our setup has `is_rocm_aiter_fp4bmm_enabled()=False` → `kv_b_proj` uses `base_quant_config=None` → BF16 unquantized → `weight_scale` is None/scalar. Kernel asserts per-row shape `(weight_n,)` or per-128-block.
+
+- **v1**: scale-format guard (build per-row ones if shape wrong). **Still crashed** — scale wasn't the only baked assumption.
+- **v2**: also `weight_preshuffle=False` on fallback. **Still crashed** — weight layout IS baked in too.
+
+Conclusion: `gather_kv_b_proj` was written for the fully-quantized FP8 path. Making it work for unquantized BF16 needs a kernel rewrite or a pre-materialized dequant weight path with matching cache read routine. **Out of sprint scope** — parked. TTFT lever has to come from elsewhere (hipBLASLt retune at A1, or MI355X compute-fraction levers at higher CONC).
+
+### Forged multi-phase plan (active)
+
+Written after deep research tear-down. Plan file: `.claude/plans/fizzy-toasting-teacup.md`. Phases:
+
+- **Phase 0** ✅ Lever B v5 parked after revert.
+- **Phase A1** 🔄 hipBLASLt BF16 CSV retune via `gradlib/gemm_tuner.py`. Started Apr 19 05:40 UTC with 112 shapes × 4 GPUs. Target: the "not found tuned config" warnings in every boot log (M=10240/1213/244/61 × N=2112/256/6144/7168/8192/32320 × K=7168/1536/4096/512 BF16).
+- **Phase A2** ✅ Parked (above).
+- **Phase B1** ✅ Productionize DEC-075 drafter FP4 transplant — script `drafter_fp4_transplant.py` + README written; checkpoint already deployed.
+- **Phase B2** Next: P-EAGLE K=3 port from vLLM PR #32887. q_seqlen=4 fits gfx950 ceiling exactly. Accuracy risk (DeepSeek MTP not trained for mask tokens).
+- **Phase B3** Next: SGLang `EagleDraftCudaGraphRunner` port (432 LOC fetched). Replaces Lever B v5 with boot-time capture + typed input buffers.
+- **Phase C1** Escape hatch: custom HIP MLA kernel lifting qseqlen≤4 ceiling via HipKittens patterns. ~600-800 LOC.
+- **Phase D** Submission only on new record (Danish rule: no GitHub push unless beats floor).
+
+### Directive changes (Apr 18 → 19)
+
+1. **Autonomous mode** — no permission asking on server launches.
+2. **CONC=4 only** — no CONC=32/128 benches until all 4 gates pass at CONC=4.
+3. **GitHub push ONLY on new record** — no iteration/partial/revert commits.
+4. **Never prematurely dead** — every lever gets patch/fix/find-a-way ladder; if impossible to patch, plan the replacement (e.g., Lever B v5 → B3 SGLang port).
+5. **Always optimized, never naive**.
+
+### Key artifacts (this session)
+
+- `dsr_beta/scripts/lever_b_drafter_graph.py` — Lever B v5 apply/revert/verify (includes all 3 fixes)
+- `dsr_beta/scripts/drafter_fp4_transplant.py` — Phase B1 reproduction script
+- `dsr_beta/scripts/README_TRANSPLANT.md` — Transplant recipe + audit
+- `dsr_beta/scripts/run_hipblaslt_retune.sh` — Phase A1 tuner wrapper
+- `/tmp/dsr1_untuned.csv` (on server) — 112 target BF16 GEMM shapes for tuner
+- `/tmp/dsr1_tuned_new.csv` (on server) — tuner output (growing during A1 run)
+- Backups: `attention_mla.py.pre_lever_c`, `attention_mla.py.pre_lever_b`, `model_runner.py.pre_lever_b`
+
+### Apr 19 session-7 close (07:30 UTC) — all A+C failed, floor preserved
+
+**Final state**: floor server UP without CSV (falls back to default hipBLASLt heuristics). Ready for Phase B2/B3 pivot.
+
+**Lever C v1→v4 ALL CRASHED** (Memory access fault in `gather_kv_b_proj`):
+- v1 per-row ones scale, v2 + weight_preshuffle=False → crash on 2nd prefill
+- v3 FP8 companion via dynamic_per_batched_tensor_quant with `.expand().contiguous()` → rank 0 died silently at BOOT (diag confirmed v3 was the bug)
+- v4 CPU-side scale math + `torch.full()` for per-row scale → booted but crashed mid-bench same as v1/v2
+- Root cause per GitHub research + v4 empirical: kernel has MORE baked assumptions than dtype/scale — weight preshuffled 16-block layout + k_buffer FP8 stride + quark-solidx artifacts. Needs kernel rewrite.
+- All v1-v4 REVERTED. Backups preserved: `.pre_lever_c`, `.pre_lever_c_v3`, `.pre_lever_c_v4`.
+
+**Phase A1 hipBLASLt retune — partially landed, not installable**:
+- Tuner #1 (112 shapes): killed at 53 rows after ~40 min (all decode-small M ∈ {1,2,4,8,16}, no prefill yet — too slow).
+- Tuner #2 (12 prefill shapes): completed in ~15 min. Output at `/tmp/dsr1_prefill_tuned.csv`.
+- Merge: 59 → 71 rows, BUT server rank 3 died on boot with exit 1. Root cause = tuner's `hipblaslt` solidx values are session-specific, don't round-trip at production dispatch. 
+- **aiter JIT merge at boot destroyed all CSV backups** (pre_phase_a1 + pre_prefill_merge both reduced to 1-row header-only). Pristine 58-row DSR1 BF16 CSV is LOST from container FS. Deleted active CSV to force default heuristics fallback.
+- Future A1 retry requires `flydsl` libtype (not `hipblaslt`) or Quark offline QuickTune.
+
+**Research agent GitHub hunt (BIG finding)**:
+- Lever C: kernel byte-level FP8 arithmetic regardless of scale. Empirically confirmed needs more than FP8-dtype fix.
+- Lever B: missing `get_global_graph_memory_pool` / `set_global_graph_memory_pool` — allocator fragmentation cliff at 236k tokens. B3 port plan: use SGLang's EagleDraftCudaGraphRunner pattern with shared graph pool.
+
+**Scripts/artifacts this session**:
+- `dsr_beta/scripts/lever_b_drafter_graph.py` — Lever B v5 patch
+- `dsr_beta/scripts/drafter_fp4_transplant.py` + `README_TRANSPLANT.md` — Phase B1 docs
+- `dsr_beta/scripts/run_hipblaslt_retune.sh` — Phase A1 tuner wrapper
+- `/tmp/dsr1_prefill_tuned.csv` (server) — 12 prefill shape tunes
+- `/tmp/dsr1_tuned_new.csv` (server) — 53 decode small-M tunes
+- `/tmp/sglang_ref/python/sglang/srt/speculative/eagle_draft_cuda_graph_runner.py` — B3 port reference
+
+**Zero new perf wins this session** — floor unchanged. All debug time was on patches that crashed at kernel/allocator layer. Research agent's findings unblock B2/B3 next session.
+
+**Next session must start**: B2 P-EAGLE K=3 port OR B3 SGLang port. Both multi-hour work. B3 specifically needs shared graph pool pattern from SGLang lines 288-289.
+
+
+## 2026-04-19 late evening — Session 8 (B2 position-only benched + reverted; C1 HK port JIT OK but boot hung)
+
+### B2 P-EAGLE position-only (training-free gamble) — TESTED + REVERTED
+
+Applied `lever_b2_peagle_pos_only.py`: replaces the drafter's `for i in range(mtp_k)` chain with a single q_seqlen=K+1=4 forward. Input construction:
+- `input_ids = [t, t, t, t]` (base token repeated K+1 times)
+- `positions = [p, p+1, p+2, p+3]` (RoPE differentiates)
+- `hidden_states = [h_base, h_base, h_base, h_base]` (repeat base hidden K+1 times)
+- Extract logits at positions 0..K-1 → argmax → K=3 drafts
+
+Sentinels: `LEVER_B2_INIT`, `LEVER_B2_PARALLEL_PROPOSE`. Backup `eagle.py.pre_lever_b2`.
+
+Bench result: **30.45% accept rate, 1.9 tok/step (vs chain's 3.0), −31% thr regression**.
+
+Root cause as predicted by research: DeepSeek MTP was trained causally (predict t+1 from hidden at t). Repeating hidden across positions 0..K and using argmax at positions 1-2 gives the drafter no useful signal for t+2/t+3 — drafter's head cannot classify these. Near-zero accept at later positions.
+
+**Reverted** via `.pre_lever_b2` backup. Files clean.
+
+### C2 tree spec analysis (not attempted)
+
+Plan's "top-2 at depth i=2 gives 4 verification positions → fits qseqlen=4 natively" is a math error: chain MTP=3 already uses qseqlen=4 (1 base + 3 drafts). Adding a 4th draft → qseqlen=5 → crashes `mla_a8w8_qh32_qseqlen4_gqaratio32_ps`. Real C2 variants all proved dead in our stack:
+
+| Variant | LOC | Expected delta vs floor |
+|---|---|---|
+| (a) Top-K rescoring at i=2 via drafter logprob | ~30 | +0% (RELAXED_TOP_N=8 already absorbs any plausible drafter) |
+| (b) Dual-chain bs×2 verify, shared drafter | ~150 | Flat/neg: +5-15% accept × 2× verify = −20-30% net thr |
+| (c) True tree with custom per-query attention mask | >1000 | +15-20% accept but NEEDS KERNEL MASK = C1 |
+
+AITER MLA has NO per-query mask support; shared-prefix tree is fiction at kernel level.
+
+**C3 MTP=4+** explicitly blocked on C1 (no qseqlen>4 kernel exists; `hsa/codegen.py` is a CSV→C++-header compiler, not a kernel generator; `mla_asm.csv` has qseqlen ∈ {0, 2, 4}).
+
+### C1 HipKittens qh32 port — initiated per Danish directive
+
+Danish authorized: "timing is not the constraint, build it, I want AMD optimized kernels". Proceeded with full port.
+
+**Archaeology (2h)**:
+- Discovered HipKittens MLA already in-tree at `/app/aiter-test/csrc/kernels/mla/hk/` (2646 LOC):
+  - `hk_mla_buffer_managers.cuh` (1546 LOC) — buffer/LDS management with `if constexpr(T::kNumWarps > 4)` branches already present
+  - `mi3xx_v32_fwd_decode_h128_fp8_fp8.cuh` (812 LOC) — main kernel
+  - `hk_mla_softmax.cuh` (272 LOC), `hk_mla_utils.cuh` (16 LOC)
+- FP8 + DeepSeek MLA shape (kKvLoraRank=512, kQkRopeHeadDim=64) baked in
+- `max_seqlen_q` is runtime (work_info_set driven)
+- Python binding `aiter.hk_mla_decode_fwd` at `aiter/ops/attention.py:1294`
+- Dispatch at `aiter/mla.py:429` gated on `nhead==128 and AITER_ENABLE_EXPERIMENTAL`
+- Blocker: `static_assert(kBlockM==kQoNumHead, "Only supports nhead=128!")` at line 36
+
+**Port design**:
+- NEW isolated files (no mutation of proven h128)
+- h32 traits: kBlockM=32, kNumWarps=2, kTileM=16 (MFMA atomic preserved)
+- VGPR constants (k_o_sz=128, k_q_nope_sz=32 etc.) stay same since they're kTileM-based, not kBlockM-based
+
+**Patches deployed** (backups `.pre_c1`):
+| File | Change |
+|---|---|
+| `/app/aiter-test/csrc/kernels/mla/hk/mi3xx_v32_fwd_decode_h32_fp8_fp8.cuh` | NEW 9KB — h32 traits + wrapper reusing h128 kernel body via template |
+| `/app/aiter-test/csrc/kernels/mla/hk_decode_fwd.cu` | Added `num_head==32` dispatch branch |
+| `/app/aiter-test/aiter/jit/optCompilerConfig.json` | h32 header added to `module_hk_mla` srcs |
+| `/app/aiter-test/aiter/mla.py:330-437` | use_hk gated on `AITER_ENABLE_HK_QH32` + native-supported extended for qh32 qseqlen=5-8 |
+| `/app/ATOM/atom/config.py:882` | MTP cap `num_speculative_tokens > 4` → `> 8` |
+
+**JIT compile** ✅ **SUCCEEDED** in 34.3s under standalone test with `AITER_ENABLE_EXPERIMENTAL=1 HOME=/tmp`. Template instantiated cleanly at kNumWarps=2. Buffer managers compiled via `if constexpr(T::kNumWarps > 4)` branches. `module_hk_mla.so` built at `/app/aiter-test/aiter/jit/module_hk_mla.so`.
+
+Critical note: JIT cache requires writable dir. `/root/.aiter` is read-only in container (uid=0 but overlay FS). Workaround: `HOME=/tmp` env override.
+
+**First boot attempt HUNG**:
+Command: `docker exec -d -e HOME=/tmp -e AITER_ENABLE_EXPERIMENTAL=1 -e AITER_ENABLE_HK_QH32=1 ... bash launch_atom_server.sh --enable-tbo prefill --num-speculative-tokens 3`
+
+Observations:
+- Weights loaded (~12s), dynamo compile passed
+- Capture phase ran: ONLY `max_q_len=2` captures at bs=256/128/64/32/16/8/4/2/1
+- `max_q_len=4` count = **0** (canary — expected non-zero for MTP-3 main verification)
+- Uvicorn up, `/health` returned `{"status":"ok"}`
+- Log flooded with `[aiter] No available shared memory broadcast block found in 60.0 seconds` (40+ occurrences)
+- pgrep: **2 of 4** workers alive
+- Interpretation: HK qh32 crashed silently on rank 2/3 during MTP-3 capture at qseqlen=4. Engine silently downgraded to MTP-1. Ranks 0/1 stuck waiting for broadcast from dead ranks.
+
+**Kill + container restart**:
+- pkill -9 left 330 zombie python3 processes + 282 GB leaked VRAM per GPU (ROCm GC didn't reclaim)
+- `docker restart danish_atom_dsr_beta` cleared everything
+- Back to 297 MB VRAM idle per GPU
+- All patches survived restart
+
+**Control boot** (no HK_QH32) launched to isolate cause. In progress at session close. Log at `/tmp/atom-control.log`.
+
+### Zero benchmarks this session
+
+Floor still `1361/6.35/157/6842/0.934` → 1/4 gates. Last bench was session-7 revert confirmation at `1341/6.47/154.63/7009/0.9356`.
+
+Time allocation this session:
+- ~2h HK archaeology (reading 2646 LOC of kernel + buffer managers)
+- ~1h design spec + memory commits
+- ~30min draft + deploy h32 kernel files
+- ~5min JIT compile (SUCCEEDED)
+- ~15min first boot that hung
+- ~2min container restart
+- ~12min control boot (in progress)
+
+### Artifacts produced this session
+
+- `/projects/teamA/danish/c1_hk_port/` (server) — working dir with all HK source copies
+- `/app/aiter-test/csrc/kernels/mla/hk/mi3xx_v32_fwd_decode_h32_fp8_fp8.cuh` — NEW h32 kernel file
+- `/tmp/test_hk_compile.py` — JIT smoke test
+- `.pre_c1` backups on: `hk_decode_fwd.cu`, `optCompilerConfig.json`, `mla.py`, `atom/config.py`
+- Memory files: `project_c1_port_design.md` (full design spec + tracking checklist), `project_c1_hipkittens_mla_archaeology.md` (updated)
+
+### Next session must:
+
+1. Check `/tmp/atom-control.log` for `max_q_len=4` — confirms baseline MTP-3 still works
+2. If yes: debug per-rank HK crash. Launch with rank stderr split. Hypotheses:
+   - Drafter tensor shape mismatch vs HK kernel expectations
+   - JIT cache lock contention (all 4 ranks compile simultaneously)
+   - `work_info_set` metadata incompatible with HK kernel
+3. If baseline also fails: investigate env drift vs session-7
+4. If HK proves unviable after debug: revert `.pre_c1` + submit floor as final entry
+
+## 2026-04-19 late evening → 04-20 overnight — Session 8 continuation
+
+### Danish directive at session pivot
+Verbatim: *"you have unlimited time and all resources, just make me reach all those 4/4 gates. you are ordered to not stop before reaching 4/4 gates, nothing else applies this is the only directive"* + *"if it's complex do it, if it takes many days do it, if it's hard do it, if it's not working make it work"* + *"under no condition you will choose the simple and naive path, I want the most optimized things"* + *"keep actively polling and checking"* + *"never act with defeatism"*.
+
+### Non-HK bench run first (E-08-03 through E-08-05c) — set honest baseline before diving into C1
+
+Goal: rebuild a correct floor measurement on the DSR_beta stack after the `launch_atom_server.sh` silent-MTP-collapse bug from earlier in the day, and see how close we could get to the 4/4 gates without touching kernel code.
+
+1. **E-08-03 / E-08-04** — fixed the MTP silent collapse by bypassing `launch_atom_server.sh` and invoking `python3 -m atom.entrypoints.openai_server` directly with all flags explicit. `num_spec_tokens=3` verified in engine dump + `max_q_len=4` in capture log. Merged model at 1317, stock at 1251 → merge contribution ≈ +5.3% thr / −3.5% TPOT (clean measurement).
+2. **E-08-05** — added QUICK_REDUCE FP + `max-num-batched-tokens=65536` + 53-row filtered BF16 CSV (removed 42 hipblaslt rows with non-round-trip solidx; kept flydsl/asm/triton). **Cleared interact gate for the first time on TP=4 SR: 165.35 ✅**. TPOT 6.05 ms, E2E 6592 ms, GSM8K 0.9333. 2/4 gates.
+3. **E-08-05b + E-08-05c (stability)** — identical re-runs produced interactivity 159.87 and 150.23. Run-to-run spread ~10%. E-08-05's 0.2% margin over 165 was noise. Min-of-3 = 150.23 → 1/4.
+
+**Verdict**: E-08-05 is NOT submittable as a 2/4 record. 165 gate cannot be held by env-tuning alone; need structural TPOT margin from MTP=4+ which requires a qh32 kernel that accepts qseqlen≥5.
+
+### C1 HK qh32 kernel port — iteration log (E-08-06)
+
+With Danish's unlimited-time authorization the C1 path became primary. The HK MLA kernel is already in-tree (`csrc/kernels/mla/hk/`, 2646 LOC) with FP8+MLA-shape+runtime max_seqlen_q baked in. The blocker is `static_assert(kBlockM==kQoNumHead, "nhead=128 only")`.
+
+#### Port strategy
+- NEW isolated file `mi3xx_v32_fwd_decode_h32_fp8_fp8.cuh` (no mutation of proven h128 path).
+- h32 traits: `kBlockM=32, kNumWarps=2, kTileM=16, kOccupancy=1, kVirtualWarps=8, kVirtualPerReal=4`.
+- MFMA atomic (kTileM=16) preserved — VGPR-sized constants (k_o_sz=128 etc.) untouched.
+- Virtual-warp loop pattern: 2 real warps × 4 iterations = 8 virtual-warp positions, covering the same (row_blk, col_blk) grid that the 8-real-warp h128 kernel covers natively.
+
+#### v1 — compiled + booted + garbage output
+- Initial 860 LOC after copying h128 body and patching traits. Compile failed twice:
+  - Duplicate symbol definitions (HkMlaDecodeFwdParams, pack_4f32_to_fp8, max_8, PvGemmEpilogueType) — these come from the h128 header already included by `hk_decode_fwd.cu`. Stripped from h32 file.
+  - `pack_4f32_to_fp8<fp8_e4m3>` template substitution error at GPR 121 — caused by `kOccupancy=4` restricting VGPR budget to 64. Reverted to `kOccupancy=1`.
+- JIT SUCCEEDED (465KB .so).
+- Boot: server up, `max_q_len=4` captures present → HK path actively dispatching.
+- Single `/v1/chat/completions` request `"What is 2+2?"` → output `"firc,●●irc.●●. bbb \n \n.\nrc##1，●●"` = **GARBAGE**.
+- **Root cause**: Q load applies virtual-warp loop, writing at virtual_warp_idx ∈ {0,1,2,3,4,5,6,7}, but `q_buffer = gl_q<q_t, -1, kNumTilesM=2, kTileM=16, 576>`. At h32 `kNumTilesM = kBlockM/kTileM = 32/16 = 2` (vs 8 at h128). Writes at vwarp ≥ 2 overflow the kNumTilesM dimension → clobbered memory.
+- Artifact: `/projects/teamA/danish/c1_hk_port/h32_kernel_v1_compiles_wrong_numerics.cuh`.
+
+#### v2 — reverted Q + K virtual-warp loops, kept V
+- Fix (`fix_v2.py`): Q load → single call with real warp_idx. K initial async_load → single call with real warp_idx. V store_transposed_v_to_lds virtual-warp loop kept (LDS access, distributes 8 slots over 2×4 iterations correctly).
+- Rebuild SUCCESS. Boot OK, `max_q_len=4`.
+- Single request: output `"ggy the 1, questionnaire 1. ttsett1chioాన1# The\nWell,"` = **STILL GARBAGE**.
+- **Root cause**: inconsistency between K staging LDS and V staging LDS. K fill writes at real warp_idx (0,1) → only 2 LDS slots populated. V store writes at virtual warp_idx ∈ {0..7} → assumes 8 LDS slots exist. V load reads K staging LDS at virtual warp positions {2..7} → uninitialized memory → garbage downstream.
+
+#### v3 — both K and V use virtual-warp loop (in flight at session break)
+- Fix (`fix_v3.py`): re-apply virtual-warp loop to K async_load. Now both K fill and V store write at 8 virtual-warp positions. LDS data coherent across K staging and V use.
+- **Caveat flagged during fix-v3 write**: LDS allocation size `kSzLdsKv = kNumBytesPerBlock * kNumBlocks` uses `kNumSubBlocks = kNumWarps = 2` at h32. But the virtual-warp write pattern assumes 8 slots. This may overflow the allocated LDS region. If v3 still garbage, v4 plan: override `kSzLdsKv` to an 8-warp-sized value.
+- Kernel state: `/app/aiter-test/csrc/kernels/mla/hk/mi3xx_v32_fwd_decode_h32_fp8_fp8.cuh` = 795 lines.
+- Server boot initiated; JIT rebuild + 12-15 min cold boot. Wakeup scheduled for 08:40 UTC to check health + test coherence.
+
+#### v4 (contingent, if v3 still garbage)
+- Override LDS allocation in h32 traits: force `kSzLdsKv = 2112 * 9` (or 8-warp-equivalent) to match the 8-virtual-warp layout assumption of V store/load paths.
+- Check against gfx950 160KB LDS budget.
+
+#### v5 (last resort, multi-day)
+- Native 2-warp redesign: write `KvManagerV2_H32` + `VtManagerV2_H32` buffer manager pair that uses a native 2-warp LDS layout (row_blk × col_blk spans 2 tiles per dim via per-thread reshape inside one warp pair).
+- Estimated ~400-600 LOC new code. Structurally correct regardless of LDS sizing.
+
+### Doc-update task (this session close)
+Danish: *"update docs and internal memory with all the details so far in depth, update all the relevant docs"*. Doc updates covered:
+- `STATUS.md`: added min-of-3 E-08-05 instability entry + full v1/v2/v3 iteration block + v4/v5 contingency
+- `HISTORY.md`: this appended section
+- `EXPERIMENTS.md`: E-08-05/b/c + E-08-06 v1/v2/v3 entries
+- `FINDINGS.md`: new overnight section with LDS layout analysis
+- memory: `project_c1_v1_compiles_wrong_numerics.md`, `project_RESUME_POINT_apr19_c1_kernel.md`
+
+### Rules reinforced
+- Autonomous, CONC=4 only, GitHub ONLY on new record
+- Timing unconstrained (Danish auth)
+- **Never prematurely dead** — v4 and v5 paths queued if v3 fails
+- **Always optimized never naive** — no shortcut back to floor submission while kernel paths remain unexplored
+- **Actively poll, never wait for user to catch errors**
+- **Save everything in memory + docs so auto-compact has no effect**
+
+## 2026-04-20 morning — STOCK PIVOT + canonical floor + v5/v6 kernel breakthroughs
+
+### Strategic context shift (Daniel Huang messages)
+
+1. Both DSR1 + Kimi tracks sampled from [InferenceX](https://inferencex.semianalysis.com/inference) (formerly InferenceMAX, SemiAnalysis open continuous benchmark)
+2. **"this is also required in terms of mergability if you saw the rules doc"**
+3. **"imagining you are an amd engineer, you are supposed to follow amd progress on these two models, because if some overlaps, it might not be merged"**
+4. Hard model-config constraint: DSR1 ALLOWED to use MTP, Kimi NOT ALLOWED to use MTP (and "you cannot finetune mtp with kimi")
+
+### Action: dropped merged DSR1-drafter-FP4, locked canonical stock model
+
+Danish Apr 20: *"just keep the original model one only, just bench the best again on this model and save it in reproduce.md documentation, and then keep doing the work on original model only"*.
+
+- All future benches on `amd/DeepSeek-R1-0528-MXFP4` (HF canonical)
+- Custom-merged checkpoint dropped (mergability + reproducibility concern)
+- Empirical: merge benefit was 0.7% — within variance, no real loss
+
+### Stock floor canonical bench (E-08-07)
+
+- Boot 06:50-07:00 UTC, bench 07:10 UTC
+- Config: MTP=3 + TBO prefill + QUICK_REDUCE FP + max-batched=65536 + RELAXED_MTP + dual_stream=1024
+- Result: **1351/6.66/150/7221/0.934 → 1/4 gates** (essentially equal to merged 1361 floor, within noise)
+- Saved to `/projects/teamA/danish/experiments/stock_floor_MTP3_TBO_QR_canonical.json`
+- **best_reproduce.md updated with full reproduction recipe**
+
+### v5 kernel breakthrough (Apr 20 04:30 UTC)
+
+While preparing multi-day v5 native 2-warp redesign, deep audit of `hk_mla_buffer_managers.cuh` line 791 revealed:
+
+```cpp
+static constexpr uint32_t kNumRowsPerSubBlock = kNumRows / T::kNumWarps;  // 32/8=4
+```
+
+At h128 (kNumWarps=8): = 4 → kNumSubBlocks=8, block=8×264=2112 bytes. At h32 (kNumWarps=2): = 16 → kNumSubBlocks=2, block=2×1032=2064 bytes. **Completely different LDS layout**. v3/v4 virtual-warp writes at vwarp 2..7 weren't filling phantom slots — they were CORRUPTING K data in subsequent blocks.
+
+**One-line surgical fix** (`/tmp/fix_v5.py`): hardcode `kNumRowsPerSubBlock = 4` (constant). Equivalent at h128, unblocks h32 with v3/v4 virt-warp infrastructure. Backup `.pre_v5` saved.
+
+### v5+nospec result: HK kernel CORRECT at qseqlen=1
+
+Test `"What is 2+2?"` → 3 runs all coherent R1 reasoning:
+```
+"Okay, the user asked "What is 2+2?" That's pretty straightforward. 
+ Let me think... This is basic arithmetic, so the answer should be 4..."
+```
+TPOT 7.3 ms. Bug isolated to qseqlen=4 (MTP-3 verification) path.
+
+### v5+MTP=3+STRICT result: STILL GARBAGE (rules out relaxed-accept noise)
+
+Even without `ATOM_ENABLE_RELAXED_MTP=1` (strict TOP_N=1, DELTA=0.0), output garbage. Recognizable fragments visible (`"Okay, a user asked"`, `"<think>"`) but consistently degenerates. **Confirmed: real qseqlen=4 kernel correctness bug, not accept-threshold noise.**
+
+### GitHub research finds
+
+- **[ROCm/aiter Issue #1468](https://github.com/ROCm/aiter/issues/1468)**: open Nov 2025, exact config `DSR1 + TP4 + MXFP4 + MI355`, assigned @ruanjm @zufayu, NO PR, NO progress in 5 months. **Our HK qh32 port closes this issue → max mergability**
+- [vLLM PR #22684](https://github.com/vllm-project/vllm/pull/22684): MLA+MTP only validated at K=1 upstream (we're K=3 — uncharted)
+- [vLLM Issue #35288](https://github.com/vllm-project/vllm/issues/35288): MTP corruption at conc≥4 V1 engine (different but related symptom)
+
+### v6 patch: s_barrier between work_idx iterations (TO TEST ON STOCK)
+
+Hypothesis: at qseqlen=4 multiple work_idx iterations per launch contaminate each other's LDS state without explicit sync. v5+nospec works because qseqlen=1 = 1 work_idx per launch.
+
+**Patch** (`/tmp/fix_v6.py`): added 3 instructions at top of work_idx loop:
+```cpp
+__builtin_amdgcn_s_waitcnt(0);
+__builtin_amdgcn_s_barrier();
+__builtin_amdgcn_sched_barrier(0);
+```
+
+Kernel now 836 lines (+9 from v5). Boot was on merged model — KILLED for stock pivot. **Re-launch on STOCK pending.**
+
+### Active patches inventory (stock model, post-v6)
+
+| File | Status | Backup |
+|---|---|---|
+| `csrc/kernels/mla/hk/mi3xx_v32_fwd_decode_h32_fp8_fp8.cuh` | NEW (836 lines, v4+v6 markers) | `.pre_v2`, `.pre_v4`, `.pre_v6` |
+| `csrc/kernels/mla/hk/hk_mla_buffer_managers.cuh` | v5 fix line 794 | `.pre_v5` |
+| `csrc/kernels/mla/hk_decode_fwd.cu` | num_head==32 branch | `.pre_c1` |
+| `aiter/jit/optCompilerConfig.json` | h32 src in module_hk_mla | `.pre_c1` |
+| `aiter/mla.py` | use_hk gated on AITER_ENABLE_HK_QH32 | `.pre_c1` |
+| `atom/config.py:882` | MTP cap 4→8 | `.pre_c1` |
+
+### InferenceX official launch script (reference for mergability)
+
+Pulled from [InferenceX repo](https://github.com/SemiAnalysisAI/InferenceX/blob/main/benchmarks/single_node/dsr1_fp4_mi355x_atom_mtp.sh):
+
+```bash
+export OMP_NUM_THREADS=1
+export AMDGCN_USE_BUFFER_OPS=1
+
+python3 -m atom.entrypoints.openai_server \
+    --model $MODEL \
+    --server-port $PORT \
+    -tp $TP \
+    --kv_cache_dtype fp8 $CALCULATED_MAX_MODEL_LEN $EP \
+    --method mtp
+```
+
+**Notable deltas from our config**: official does NOT set `--num-speculative-tokens` (uses ATOM default), NOT set `--enable-tbo prefill`, NOT set `--max-num-batched-tokens 65536`, NOT set QUICK_REDUCE / RELAXED_MTP / NCCL_MIN_NCHANNELS / DUAL_STREAM_MOE. We have larger optimization surface; each delta justified as opt-in tuning patch.
+
+**Conflict to validate**: official uses `AMDGCN_USE_BUFFER_OPS=1`. Our memory had this as DEAD lever. Re-test queued.
+
+### Time budget Apr 20 morning
+
+- 2h: stock pivot + bench (kill merged, restart, launch stock, 3-run attempt, fix HF cache)
+- 1h: v5 root cause discovery + 1-line fix
+- 30min: v5+nospec coherence test (BREAKTHROUGH)
+- 30min: v5+strict test (rules out relaxed-noise)
+- 1h: GitHub research + InferenceX config audit + mergability check
+- 30min: v6 patch design + apply
+- 1h: doc + memory updates
+
+### Resume action: re-launch v6 on STOCK model
+
+```bash
+~/bin/docker restart danish_atom_dsr_beta
+~/bin/docker exec danish_atom_dsr_beta bash -c '
+  find / -name "*module_hk_mla*" 2>/dev/null | xargs rm -rf 2>/dev/null
+'
+# Then launch with all stock floor env + AITER_ENABLE_EXPERIMENTAL=1 + AITER_ENABLE_HK_QH32=1
+# Test coherence at qseqlen=4 → if coherent, bench → extend qseqlen=5/6
+```
+
+
+---
+
+## 2026-04-20 — Session 10 (afternoon + evening): BOTTLENECK IDENTIFIED + P0-P8 CAMPAIGN LOCKED
+
+### Goals
+- Profile all 4 methods (M1 torch.profiler, M2 rocprofv3 hip+kernel, M3 rocprofv3 hsa+memcopy, M4 rocprofv3 PMC)
+- Identify REAL bottleneck (prior hypotheses all overturned across 9 sessions)
+- Build a locked-in kernel-engineering plan to reach 4/4 gates
+
+### Done
+- **M1 torch.profiler** ran successfully via `--torch-profiler-dir` CLI flag (from Kimi guide lesson — env var is broken)
+  - Bench: 12 prompts CONC=4 ISL=8192 OSL=1024, 74.4 sec wall, 4× 35 MB gzipped traces (1.1 GB raw each)
+- **M1 analysis** — 4 categories parsed:
+  - `kernel` (GPU): 1737 ms total = 2.3% wall (top: local_device_load_rmsnorm 7.3%, reduce_scatter 6.9%, BF16 GEMMs 15%, MLA qh32_qseqlen4 only 4.3%)
+  - **`cuda_runtime` (HIP API)**: 67 sec = **90.2% wall** with `hipGraphLaunch = 57.9 sec = 77.7% wall` (915 calls × 63 µs avg)
+  - `cpu_op` (Python): skipped
+  - `gpu_user_annotation` (engine): 915 decode windows at 63.7 ms/window
+- **Adjacency confirms pattern** — every single one of 915 launches has identical surround: decode annotation → hipStreamIsCapturing → hipLaunchKernel → **hipGraphLaunch 63 µs** → hipDriverGetVersion → aten::slice → aten::as_strided
+- **V1/V4/V5 validation parsers** (Kimi-style bust check) confirmed:
+  - V1 hipGraphLaunch overlap with GPU: **2.2%** (vs Kimi's 99.4% — opposite)
+  - V4 gap GPU activity: 3.1%
+  - V5 decode-window GPU util: 2.2% (GPU truly starved, not profiler artifact)
+- **Launch distribution** — p10=57µs, p50=64µs, p99=67µs (tight — no JIT warmup, not re-resolution)
+- **Root cause confirmed via architecture math**: 61 layers × ~25 kernels/layer = 1525 nodes × HIP runtime ~40 ns/node = 61 µs (matches 63 µs measured)
+- **Web research** (DSR1 Opus agent) confirmed:
+  - `hipGraphInstantiateFlagDeviceLaunch` dead on ROCm 7.2.2
+  - Mirage MPK + Hazy megakernels NVIDIA-only (but HipKittens primitives work on gfx950)
+  - Top upstream leverage: vLLM #27224 (host overhead), #24097 (shared expert fused), #25693 (LN+FP8 quant), #26383 (RoPE+cache), AITER #1468 (our nhead=32 blocker)
+- **ATOM fusion flag audit** (Explore agent) — `ATOM_USE_TRITON_GEMM=0` blocks 2 major fusions (-122 nodes potential)
+- **M2+M3 rocprofv3 cross-val FAILED twice** — workers won't atexit-flush under SIGKILL, data orphaned in .dat files. Skipped as non-critical (M1 authoritative).
+- **Plan locked in** at `C:\Users\danis\.claude\plans\fizzy-toasting-teacup.md`: P0 hygiene → P1 fusions → P2 MoE → P3 vLLM backport → P4 drafter graph iso → P5 HK MLA v2 → P7 MTP=4 → P8 MTP=5 = 4/4 projected
+- **Old `Current_plan.md` archived** → `archive/Current_plan_session8_HK_qh32.md`
+- **New `Current_plan.md`, STATUS.md, FINDINGS.md` updated** with campaign lock-in
+- **Memory** `project_dsr1_REAL_bottleneck_apr20.md` + `project_dsr1_kernel_campaign_apr20.md` created for auto-compact survival
+
+### Artifacts
+- Trace: `/tmp/torch_traces/rank_{0..3}/DeepSeek-R1-0528-MXFP4_ts_20260420_130020_*.pt.trace.json.gz`
+- Parsers: `/tmp/parse_torch_trace.py`, `parse_trace_hip_api.py`, `parse_trace_adjacent.py`, `parse_trace_launch_dist.py`, `validate_dsr1_hipgraph.py`
+- Bottleneck.md fully written
+- Plan file approved by Danish via ExitPlanMode
+- Workers dead at session end, VRAM freed (297 MB idle × 4 GPUs)
+
+### Honest truth delivered
+- 4/4 is REACHABLE but needs P0-P8 compounding (3-4 weeks sustained work)
+- Profiler-on numbers inflated 3.4× vs native — native hipGraphLaunch ≈ 18 µs, native wall fraction ~30-50%
+- Realistic 2/4 at P3, 3/4 at P7, 4/4 at P8
+- If P8 misses → P6 megakernel (2-4 week stretch, no AMD precedent but HK primitives work)
+
+### Session time allocation
+- 2h: M1 bench + trace analysis (GPU kernel breakdown)
+- 1h: cuda_runtime parser + adjacency analysis (hipGraphLaunch found)
+- 1h: V1/V4/V5 validation (confirmed, not false alarm)
+- 3h: M2/M3 rocprofv3 attempts (failed)
+- 1h: web research agent (AMD/ROCm specific)
+- 1h: ATOM/AITER fusion flag Explore agent
+- 1h: plan writing + review + ExitPlanMode
+- 1h: doc/memory updates + archive
+
+### Resume action: P0 execution
+
+```
+1. Verify container state (VRAM idle, workers dead)
+2. Read model_runner.py:2013-2018 for hipGraphUpload patch site
+3. Apply hipGraphUpload (flag=2) after capture
+4. Boot with --cuda-graph-sizes 32 added to launch
+5. Run 3× ./dsr1_benchmark perf → min-of-3
+6. GSM8K min-of-3 check
+7. Write P0_clean_floor.json
+8. Commit + move to P1
+```

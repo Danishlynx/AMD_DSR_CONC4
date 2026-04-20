@@ -1,0 +1,71 @@
+{
+  "phase": "P0",
+  "description": "Clean floor — added --cudagraph-capture-sizes [1,2,4,8,16,32] to canonical launch",
+  "date": "2026-04-20",
+  "session": "session-10",
+  "model": "amd/DeepSeek-R1-0528-MXFP4",
+  "config": {
+    "tp": 4,
+    "method": "mtp",
+    "num_speculative_tokens": 3,
+    "enable_tbo": "prefill",
+    "max_num_batched_tokens": 65536,
+    "max_model_len": 10240,
+    "kv_cache_dtype": "fp8",
+    "cudagraph_capture_sizes": "[1,2,4,8,16,32]"
+  },
+  "envs": {
+    "AITER_ENABLE_VSKIP": "0",
+    "ATOM_ENABLE_RELAXED_MTP": "1",
+    "ATOM_DUAL_STREAM_MOE_TOKEN_THRESHOLD": "1024",
+    "HIP_FORCE_DEV_KERNARG": "1",
+    "HSA_NO_SCRATCH_RECLAIM": "1",
+    "NCCL_MIN_NCHANNELS": "16",
+    "VLLM_ROCM_QUICK_REDUCE_QUANTIZATION": "FP",
+    "VLLM_ROCM_QUICK_REDUCE_CAST_BF16_TO_FP16": "1"
+  },
+  "workload": {
+    "dataset": "random",
+    "isl": 8192,
+    "osl": 1024,
+    "num_prompts": 40,
+    "max_concurrency": 4
+  },
+  "runs": [
+    {"run": 1, "total_tput": 6165.57, "thr_per_gpu": 1541.39, "median_tpot_ms": 5.274, "median_ttft_ms": 373.31, "median_itl_ms": 16.351, "median_e2e_ms": 5762.86, "duration_s": 59.58},
+    {"run": 2, "total_tput": 6000.45, "thr_per_gpu": 1500.11, "median_tpot_ms": 5.404, "median_ttft_ms": 373.82, "median_itl_ms": 16.426, "median_e2e_ms": null, "duration_s": 61.15},
+    {"run": 3, "total_tput": 6494.70, "thr_per_gpu": 1623.68, "median_tpot_ms": 5.194, "median_ttft_ms": 374.25, "median_itl_ms": 16.247, "median_e2e_ms": null, "duration_s": 56.28}
+  ],
+  "min_of_3": {
+    "thr_per_gpu": 1500.11,
+    "interactivity_tok_s_user": 185.04,
+    "median_tpot_ms": 5.404,
+    "median_e2e_ms_run1_only": 5762.86
+  },
+  "gsm8k": {
+    "lm_eval_version": "local-completions",
+    "num_fewshot": 3,
+    "flexible_extract": 0.9318,
+    "strict_match": 0.9227,
+    "single_run": true
+  },
+  "gates": {
+    "thr_per_gpu": {"value": 1500.11, "gate": 1500, "pass": true, "margin_pct": 0.01},
+    "interactivity": {"value": 185.04, "gate": 165, "pass": true, "margin_pct": 12.1},
+    "median_e2e_ms": {"value": 5762.86, "gate": 5000, "pass": false, "gap_ms": 762.86},
+    "gsm8k": {"value": 0.9318, "gate": 0.93, "pass": true, "margin": 0.0018}
+  },
+  "gates_passed": 3,
+  "gates_total": 4,
+  "notes": [
+    "P0 clean floor crosses 3/4 gates with pure hygiene change (no code patches).",
+    "Single CLI flag --cudagraph-capture-sizes [1,2,4,8,16,32] cuts TPOT 6.66→5.27 ms (-21%).",
+    "Default cudagraph_capture_sizes=[1,2,4,8,16,32,48,...,512] = 33 variants was hurting perf.",
+    "Previous 'canonical stock floor' 1351/6.66/150/7221/0.934 was measured with suboptimal capture config.",
+    "E2E gate still fails by 763 ms; expected to close via P1+P2+P7 (MTP=4) stack.",
+    "Campaign plan now uses 1500/5.40/185/5763/0.9318 as new P0 baseline — subsequent phases stack on this.",
+    "GSM8K flexible-extract used (matches ATOM harness). strict-match=0.9227 is below 0.93 but considered secondary metric.",
+    "Run1 had --save-detailed; runs 2,3 saved summary only (median_e2e not computed offline).",
+    "Server remained UP after all 3 runs (4/4 workers alive, stable)."
+  ]
+}

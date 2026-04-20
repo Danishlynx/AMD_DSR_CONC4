@@ -1,28 +1,51 @@
-# 🚨 FINAL PUSH MODE — 2026-04-17 late night (read FIRST)
+# 🚧 SESSION-8 — C1 HipKittens qh32 port in flight (Apr 19 late evening)
 
-User declaration: **Block 3 / Kimi / May 15 horizon DROPPED. Single mission: 4/4 CONC=4 gates by Apr 18 night or submit at sub-rank.** No more multi-week plans. No more Kimi track. Everything CONC=4 DSR1 in 24 hrs.
+**Most current state** — update chain: Apr 17 FINAL PUSH → Apr 18/19 multi-phase plan → Apr 19 session-7 short-patch exhausted → **Apr 19 session-8 C1 full port initiated**.
 
-Current floor DEC-066: 1221 thr/GPU, 6.73 ms TPOT, 148.6 interact, 7663 ms E2E, 0.9378 GSM8K → **1/4 gates**. Binding gate is E2E ≤ 5000 ms → TPOT ≤ 4.52 ms → need **−33%**.
+Danish directive (2026-04-19): **"timing is not the constraint, build it, I want AMD optimized kernels"**.
+
+## Floor (unchanged)
+
+`1361 / 6.35 / 157.55 / 6842 / 0.934` → **1/4 gates**. Last re-bench `1341/6.47/154.63/7009/0.9356` — within noise. **ZERO benchmarks this session**.
 
 ## Active plan
-`C:\Users\danis\.claude\plans\fizzy-toasting-teacup.md`
+- `C:\Users\danis\.claude\plans\fizzy-toasting-teacup.md` (session-8 entry at top)
 
 ## Key docs
-- `Current_plan.md` — top-of-head summary, self-contained
-- `Best_atom_dsr_cncc4/best_reproduce.md` — current floor + repro + dead-end log
-- `MASTER_FINDINGS.md` — canonical results + decision history
-- `daily_log.md` — chronological DEC record
-- `memory/project_final_push_apr17_18.md` — this push's mission
+- `Current_plan.md` — top-of-head summary (updated session-8)
+- `MASTER_FINDINGS.md` — canonical results + decision history (updated session-8 with C1 port + HK discovery)
+- `daily_log.md` — chronological record (session-8 appended with B2 test + C1 initiation)
+- `best_reproduce.md` — floor repro recipe
 
-## State at this moment (Apr 17 04:11 UTC)
-- BF16 decode CSV tuner RUNNING (~45 min left)
-- Phase 4A v4 drafter HIP graph shipped DEC-069, NULL result, patch stays as infra
-- Hard rule: every intervention needs measured-target + mechanism + expected-delta + pass/fail gate + post-measurement (see `memory/feedback_pre_measure_or_dont_ship.md`)
+## Session-8 state (Apr 19 late evening)
 
-## Realistic outcome probabilities
-- 4/4 CONC=4 gates by Apr 18 night: **50-60%** if lever stack behaves near mean
-- 2-3/4 gates (interact + GSM8K definite, thr close, E2E hardest): **85%**
-- Submit sub-rank position if 4/4 missed
+- **B2 P-EAGLE position-only tested + reverted**: 30% accept, 1.9 tok/step, −31% thr regression. Training-free init gives near-zero accept at t+2/t+3 as research predicted.
+- **C2 short-patch proved DEAD**: all 3 variants (top-K rescore / dual-chain / true tree) are no-op, net-neg, or require C1's kernel mask.
+- **C3 MTP=4+ blocked on C1**: no qseqlen>4 kernel exists; `hsa/codegen.py` is a CSV compiler not kernel generator.
+- **🎯 HipKittens MLA discovery**: `csrc/kernels/mla/hk/` has 2646 LOC HK MLA already integrated. FP8 + DeepSeek shape + runtime max_seqlen_q all baked in. Blocker: `static_assert(nhead==128)`.
+- **C1 patches deployed**: NEW `mi3xx_v32_fwd_decode_h32_fp8_fp8.cuh` + dispatch + mla.py routes + MTP cap lift. Backups `.pre_c1`.
+- **JIT compile SUCCEEDED**: 34.3s clean, no template errors. `module_hk_mla.so` built.
+- **First boot HUNG**: MTP silently collapsed to MTP-1 (no `max_q_len=4` captures), 2 of 4 TP workers alive, SHM broadcast timeout spam. Likely rank 2/3 silent crash during MTP-3 drafter capture.
+- **Container restart cleared VRAM/zombies**. Patches intact.
+- **Control boot in progress** (no HK) to isolate cause — running at session close.
+
+## Hard rule reminder
+Every intervention needs: measured-target + mechanism + expected-delta + pass/fail gate + post-measurement (see `memory/feedback_pre_measure_or_dont_ship.md`).
+
+## Realistic session-9 outcomes
+- If HK debug yields correct MTP-3 at mtp_k=3 + perf match or beat: real shot at MTP-4 at +33% tok/step = 4/4 gates
+- If HK proves unviable after debug: revert + submit floor at 1/4 gates
+- No other positive-math path identified
+
+---
+
+## Historical (prior session context below)
+
+### 🚨 FINAL PUSH MODE — 2026-04-17 late night (original declaration)
+
+User declaration: **Block 3 / Kimi / May 15 horizon DROPPED. Single mission: 4/4 CONC=4 gates by Apr 18 night or submit at sub-rank.**
+
+Floor DEC-066: 1221 thr/GPU, 6.73 ms TPOT, 148.6 interact, 7663 ms E2E, 0.9378 GSM8K. Binding gate was E2E ≤ 5000 ms → TPOT ≤ 4.52 ms → need **−33%**. (Note: floor improved since to 1361/6.35/157/6842/0.934 via DEC-075 drafter FP4 transplant.)
 
 ---
 
