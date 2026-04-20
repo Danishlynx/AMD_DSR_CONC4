@@ -490,3 +490,58 @@ Confidence: HIGH. The v3/v4 architecture is correct; v5 just makes the LDS layou
 - **Conclusion**: The CLI flag `--cudagraph-capture-sizes [1,2,4,8,16,32]` ALONE unlocked 2 gates (Thr/GPU + Interactivity) by reducing captured graph variants from 33 (default [1,2,4,8,16,32,48,...,512]) to 6 (only sizes we actually use at CONC=4). The default capture was bloating the engine's bs→graph dispatch dict + consuming device memory for unused graph structures. **This is a pure hygiene win that the previous committable floor was missing.**
 - **New P0 baseline**: all subsequent phases (P1-P8) measure delta vs this 1500/5.40/185/5763/0.9318 baseline, not the older 1351/6.66/150/7221/0.934.
 
+
+---
+
+## E-10-P1: ATOM_USE_TRITON_GEMM=1 attempt (CRASHED, reverted)
+
+- **Time**: Apr 20 ~17:25 UTC
+- **Config**: P0 gold + `-e ATOM_USE_TRITON_GEMM=1`
+- **Boot attempt #1**: CRASHED on `assert has_triton_kernels()` in `atom/model_ops/moe.py:694` (triton_kernels package missing)
+- **Pip install attempt**: DISASTER — `pip install triton_kernels` pulled 16 NVIDIA CUDA packages + torch 2.11 CUDA build, REPLACING our AMD ROCm torch. Recovered by copying pristine torch+deps from `rocm/atom-dev:latest` image.
+- **Boot attempt #2**: Applied surgical moe.py patch for soft-fallback. Boot succeeded past init, then CRASHED during forward pass with `RuntimeError: mat1 and mat2 shapes cannot be multiplied (30720x3584 and 7168x2112)` — linear.py fused FP4 GEMM expects packed layout, got unpacked.
+- **Conclusion**: `ATOM_USE_TRITON_GEMM=1` has deeper FP4 shape assumption beyond the moe.py assertion. Not a simple pip install OR soft-fallback patch. Needs linear.py investigation (tuned_gemm.py:411 torch_gemm fallback path).
+- **Reverted**: moe.py.preP1 restored, `/app/ATOM/atom/model_ops/moe.py` pristine.
+- **Gate count**: unchanged (3/4 on P0 gold after recovery).
+
+## E-10-P0.5: --cudagraph-capture-sizes [1,2,4] narrowing
+
+- **Time**: Apr 20 ~17:45 UTC
+- **Config**: P0 gold + narrowed capture from [1,2,4,8,16,32] → [1,2,4]
+- **Rationale**: at CONC=4 engine never uses bs>4; more narrowing could cut more dispatch overhead
+- **Boot**: ✅ successful, 3 captures (bs=1,2,4) all at max_q_len=4
+- **Min-of-3 bench**:
+  - Run 1: Thr/GPU 1570.40, TPOT 5.28 ms, Interact 189.4
+  - Run 2: Thr/GPU 1565.81, TPOT 5.40 ms, Interact 185.2
+  - Run 3: Thr/GPU 1587.08, TPOT 5.25 ms, Interact 190.5
+  - **Min-of-3: Thr/GPU 1565.81, TPOT 5.40, Interact 185.2**
+- **Conclusion**: **NEUTRAL** — within noise of P0 gold min-of-3 (1554/5.25/188). No meaningful improvement. Narrowing below [1,2,4,8,16,32] doesn't help.
+- **Decision**: keep P0 gold setting `[1,2,4,8,16,32]` as canonical (safer if workloads ever spike beyond bs=4).
+
+## E-10-P7: MTP=4 with HK qseqlen=5 attempt (CRASHED, reverted)
+
+- **Time**: Apr 20 ~17:55-18:07 UTC
+- **Config**: P0 gold + `--num-speculative-tokens 4` + `-e AITER_ENABLE_HK_QH32=1 -e AITER_ENABLE_EXPERIMENTAL=1`
+- **Hypothesis**: if HK kernel already supports qseqlen=5-8 (per aiter/mla.py:346-354 dispatch gate), MTP=4 should work natively with just env flags.
+- **Boot**: started at 17:55 UTC, weights loaded, JIT compile completed, CAPTURE phase began at bs=32 max_q_len=5
+- **Crash**: during capture at bs=32, all 4 GPUs hit `Memory access fault by GPU node-X, Reason: Write access to a read-only page`
+  - `GPU node-4, Agent 0x24dcc9a0, address 0x719586050000`
+  - `GPU node-5, Agent 0x359ca4e0, address 0x777977ef5000`
+  - `GPU node-3, Agent 0x32116970, address 0x7399a102c000`
+  - `GPU node-2, Agent 0x4daa54a0, address 0x7f99cc028000`
+- **Root cause**: HK h32 kernel's work_info_set handling doesn't support qseqlen=5 (same class as v7/v8/v8c crashes from session-9). Kernel body assumes specific qseqlen-4 layout.
+- **Retry v2**: --cudagraph-capture-sizes [1,2,4] to test if only bs>4 fails. (In progress at 18:07-18:13, still JIT compiling.)
+- **Conclusion** (pending v2): HK MLA C1 kernel CANNOT support qseqlen=5 without dedicated kernel work. P5 kernel fix is mandatory for MTP=4 path.
+- **Impact on roadmap**: P7/P8 BLOCKED until P5 kernel fix lands. P5 is multi-day kernel surgery.
+
+## Session-10 HONEST status
+
+**Committable state**: P0 gold 3/4 gates (1554/5.25/188/5762/0.9318). Committed as `rocm/atom-dev:dsr1_P0_3of4_gates_apr20`, pushed to GitHub `dsr_best_P0_3of4_apr20` branch.
+
+**E2E gate gap**: 762 ms over 5000 target. Not closable without:
+- MTP=4+ via HK kernel fix (P5 blocker), OR
+- Major TTFT cut (~400ms) + TPOT cut (~0.5ms) stacked, OR
+- Alternative non-HK MLA path for qseqlen=5 (doesn't exist on ATOM/AITER today)
+
+**Realistic ceiling without kernel work**: 3/4 gates. Fourth gate needs kernel fix or algorithmic breakthrough.
+
