@@ -225,6 +225,24 @@ Not-found count during capture phase: 68 (was 15 at boot). So many cudagraph-cap
 
 Re-running 3 more for variance stability.
 
+### RE.2c/d/SANITY: persistent BF16 CSV CRASHES GPU (17:27-18:10 UTC)
+
+**Failure**: Moved RE.2 + RE.2b tuned entries (15 + 32 = 47) to persistent `/app/aiter-test/aiter/configs/model_configs/dsr1_bf16_tuned_gemm.csv` (aiter's auto-merge glob). Server cold-boot → **Memory access fault by GPU node-2,3,4,5** during cudagraph capture phase. Even rolling back to just 15 shapes crashed.
+
+**Root cause hypothesis**: our "naive" custom tuner (`phase_re_artifacts/custom_bf16_tuner.py`) used `torch.randint(-10, 10)` test tensors and did NOT validate correctness against reference torch.matmul. hipBLASLt sol_idx values picked may only be valid for our specific test-tensor layout. At real inference, different tensor alignment/stride → OOB write → GPU fault.
+
+**SANITY verification (18:03-18:09 UTC)**: Removed custom CSV entirely. Server boots clean. 3-run bench: 1353/1365/1362 thr/GPU (min 1353, avg 1360, TPOT 6.15 mean). Matches RE.2 /tmp bench numbers (which were also "unloaded" since aiter's regenerate auto-overwrites /tmp).
+
+**Final RE.2 conclusion**: **ZERO effect from custom BF16 CSV.** The "+0.9% win" I reported earlier was measurement variance. `/tmp/aiter_configs/` gets REGENERATED on every aiter import from source model_configs files — my /tmp merges were always overwritten. model_configs/ IS the right persistent path, but our tuned sol_idx values cause GPU crashes.
+
+**Lesson (AMD-engineer-level tuning requirement):**
+- Custom tuner MUST validate correctness via `checkAllclose` vs torch.matmul reference for each sol_idx before accepting.
+- MUST use real inference tensor shapes AND real data ranges (not randint(-10,10) which has uniform distribution, not LLM activation patterns).
+- MUST use aiter's official `batched_gemm_bf16_tune.py` or equivalent that has this scaffolding built-in.
+- Just timing `hipb_findallsols` candidates without correctness check = naive, dangerous, unusable.
+
+**Accepted state**: RE.1 INT4 AR stands as only confirmed win (1266 → 1360 avg, +7.4%). Moving to RE.3 MoE with Phase-1-level rigor.
+
 ## RE.3 — MoE CSV expansion (queued)
 
 Add entries for `token ∈ {1024, 1536, 2048, 4096, 32768}` with broader tile search. Tuner: `/app/aiter-test/csrc/ck_gemm_moe_2stages_codegen/gemm_moe_tune.py` (works with `HOME=/tmp`).
