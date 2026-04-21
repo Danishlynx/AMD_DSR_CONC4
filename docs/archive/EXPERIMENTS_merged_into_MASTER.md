@@ -2,6 +2,38 @@
 
 **Rule**: every `./dsr1_benchmark perf` run goes here with full config + raw metrics + conclusion. Do not overwrite result.json without saving. See `memory/feedback_always_document_experiments.md`.
 
+---
+
+## Session-12 experiments (Apr 21)
+
+### E-12-PA: 1-line ATOM patch — non-persistent fallback for qseqlen > 4 (vLLM #39616 mirror)
+
+- **Time**: Apr 21 ~05:30 UTC
+- **Trigger**: P5 EAGER MTP=4 + AITER_ENABLE_HK_QH32=1 crashed at 04:49 UTC ("Memory access fault, Reason: Unknown" during warmup, before any cudagraph capture). Falsified hypothesis "kernel works in eager, only cudagraph fails" → entire HK qseqlen=5 surgery branch dead.
+- **Research findings driving pivot** (cached at `C:\Users\danis\tmp_research\`):
+  - AITER PR #2727 (Apr 17, in our HEAD): bf16/bf16 qh32 native PS kernel + opens `(nhead*qseqlen)%128==0` predicate
+  - vLLM PR #39616 (Apr 20 — yesterday): production MI355X spec=7 pattern at +76% tok/s on Kimi-K2.5
+  - AITER #2720: qseqlen ∈ {5,6,7} silently broadcasts pos-0 (DEAD); pow-2 only ⇒ qseqlen ∈ {1,2,3,4,8} OK
+- **Patch**: `/app/ATOM/atom/model_ops/attention_mla.py:569`
+  ```python
+  # BEFORE
+  use_persistent_mode = not (dp_size > 1)
+  # AFTER
+  _max_qo_ok_for_persistent = attn_metadata.max_seqlen_q <= 4
+  use_persistent_mode = (not (dp_size > 1)) and _max_qo_ok_for_persistent
+  ```
+- **Backup**: `attention_mla.py.prePA`
+- **Validation**: syntax-clean (ast.parse OK); diff is 1 logical line replaced + 5 comment lines added
+- **Container state**: ATOM `f8453e3`, AITER `73ad002` (PR #2727 confirmed in `mla_asm.csv`)
+- **Status**: PA done. PB (boot eager MTP=7) next.
+- **GPU allocation**: reduced to 4 (0-3) at ~05:25 UTC; Kimi reclaimed 4-7
+
+### E-12-PB through E-12-PE: pending — see plan file
+
+Phase ladder: PA ✅ → PB (eager boot smoke) → PC (cudagraph + 3× perf) → PD (3× GSM8K) → PE (commit + push if 4/4) → PF (stack opts if 3.5/4) → PG (HK qh32 qseqlen=8 port if PF maxes).
+
+
+
 **Gate definitions (official, ISL=8192 OSL=1024 CONC=4)**:
 - Thr/GPU: ≥ 1500
 - Interactivity: ≥ 165 tok/s/user

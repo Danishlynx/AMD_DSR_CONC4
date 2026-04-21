@@ -1,6 +1,75 @@
 # DSR1 CONC=4 — STATUS (single source of truth for current state)
 
-**Last updated**: 2026-04-20 session-10 (P0-P8 kernel-engineering campaign locked in; P0 in progress)
+**Last updated**: 2026-04-22 session-14 noon UTC (wrapper-vs-direct bench regression discovered, Q3.3 applied)
+
+## 🚨🚨🚨 SESSION-14 CRITICAL FINDING (Apr 22 ~12:00 UTC) — "gold 1500" was NEVER submittable
+
+Our "gold P0 3/4 gates" claim from Apr 20 is BROKEN. The 1500-1614 thr/GPU numbers in `P0_run{1,2,3}.json` and `P0_reverify_run{1,2,3}.json` came from **direct bench** (`python3 -m atom.benchmarks.benchmark_serving`), NOT from the competition wrapper (`dsr1_benchmark`). Confirmed by filename convention (wrapper always writes `result_isl<ISL>_osl<OSL>_conc<CONC>.json`; our files are `/tmp/P0_run1.json` which matches the direct-bench command documented at `best_reproduce.md:117-128`).
+
+**Competition flow is locked** (`dsr1_benchmark.cpp:1124-1134`):
+1. `run_accuracy_test_gsm8k` — `lm_eval --num_concurrent=65 --num_fewshot=3` (~10 min heavy load)
+2. `validate_accuracy` — must be ≥ 0.93 GSM8K to continue
+3. `run_benchmark_serving` — clones `github.com/kimbochen/bench_serving`, runs its `benchmark_serving.py`
+4. `tput_per_gpu = total_token_throughput / 8.0` (hardcoded for TP=8; we modify to /4.0 for TP=4)
+
+**Only allowed wrapper modification**: `/8.0 → /4.0` (per Danish directive).
+
+**Today's wrapper baseline (same P0 config, wrapper flow)**: 1289-1327 thr/GPU — **below the 1500 gate**.
+**Today's direct-bench baseline (same P0 config)**: 1465-1614 thr/GPU — matches "gold" claim.
+
+**The gap is ~12-15% induced by GSM8K-before-perf** (GPU DVFS state trough, HIP dispatch dict pollution, Python scheduler state, allocator fragmentation — server is not cold when perf starts).
+
+**Implication for Q3/Q4 plan**: Every lever must be re-validated under wrapper flow, not direct bench. A lever that helps direct-bench but not wrapper does NOT count for submission. Yesterday's 3/4 was never wrapper-validated, so our true starting gate count may be 1/4 or 2/4, not 3/4.
+
+**Q3.3 status**: `moe.py` + `deepseek_v2.py` shared-experts fusion patches APPLIED to `reproducer_best` container (spawned from gold image). Server cold-booted, smoke test passed. Direct-bench 3 runs: 1465/1524/1614 thr/GPU, TPOT 5.22-5.31. Wrapper bench LAUNCHED at 12:06:51 UTC, result pending (~12 min).
+
+Memory: [`memory/feedback_wrapper_divide_by_4_only.md`](../../../.claude/projects/c--Users-danis-OneDrive-Desktop-AMD/memory/feedback_wrapper_divide_by_4_only.md)
+
+---
+
+## 🎯 SESSION-13 (Apr 21 evening) — multi-day commit + lab container
+
+**Authority** (Danish, evening): "you will not stop until all 4 gates accomplished, the only order, everything has to be done even if complex or broken, patch it fix it do it"
+
+**MTP=7 paths exhausted** (see session-12 entry below). All qseqlen=8 cudagraph paths crash:
+- FP8 + 7-patch surgery (asm_mla.cu fold extension): boot success, smoke test pass, **CRASH at first GSM8K inference** under load
+- BF16 KV + cudagraph capture: **CRASH at first capture shape** (bs=4 max_q_len=8) regardless of capture sizes
+- Eager mode at qlen=8: WORKS (GSM8K 0.9287 within noise of 0.93) but 4× slower TPOT — net E2E worse
+
+**Pivoted to multi-day Q-series plan** at `C:\Users\danis\.claude\plans\fizzy-toasting-teacup.md`:
+- Q3 host-side stack (20-28h): TRITON_GEMM, shared-experts (#24097), LN+FP8 fusion (#25693), RoPE+KV fusion (#26383). Stack ceiling ~5300ms E2E (still 3/4)
+- Q4 HK qh32 qseqlen=8 native kernel port (3-5 days): only mathematical hope of 4/4
+
+**Containers**:
+- `dsr_beta_q3_lab` ← spawned from gold P0 image `rocm/atom-dev:dsr1_P0_3of4_gates_apr20`. P0 booting now. AITER `73ad002`, ATOM `f8453e3` matching gold. Port 8892:8890.
+- `danish_atom_dsr_beta` ← original session-13 working container. All PB session-12 reverts confirmed clean. Idle.
+
+**Session-13 finding**: ATOM has `is_rocm_aiter_fusion_shared_expert_enabled` already plumbed (5 call sites in topK.py). `FusedMoEModularKernel(prepare_finalize, shared_experts=...)` accepts shared_experts directly. DSR1 model has `self.shared_experts` at line 879. Q3.3 may be lighter than expected (uncomment + remove explicit shared_experts call sites + adjust topk).
+
+Memory: [`memory/project_dsr1_session13_qplan_apr21.md`](../../../.claude/projects/c--Users-danis-OneDrive-Desktop-AMD/memory/project_dsr1_session13_qplan_apr21.md)
+
+---
+
+## 🚨 SESSION-12 PIVOT (Apr 21 ~05:30 UTC) — read this first
+
+Previous P5 HK qseqlen=5 surgery walked back. Slot B `--enforce-eager --num-speculative-tokens 4 + AITER_ENABLE_HK_QH32` crashed with "Memory access fault, Reason: Unknown" during warmup BEFORE cudagraph capture. Falsifies "kernel works in eager, only cudagraph fails" hypothesis.
+
+**Replaced with**: 1-line patch to `/app/ATOM/atom/model_ops/attention_mla.py:569` mirroring vLLM PR #39616 (merged YESTERDAY, +76% tok/s on MI355X with Kimi-K2.5+Eagle3 spec=7). Disable persistent metadata for qseqlen > 4; AITER kernel computes its own non-persistent metadata internally.
+
+**MTP map per AITER #2720**:
+- Working FP8 qseqlen: {1, 2, 3, 4, 8} → spec ∈ {0, 1, 2, 3, 7}
+- **DEAD silent-corrupt**: {5, 6, 7} → spec ∈ {4, 5, 6} (do NOT bench these, GSM8K silently tanks)
+- **The only viable spec > 3 is spec=7 (qseqlen=8)**
+
+**Patch applied** Apr 21 05:30 UTC. AITER pin `73ad002` (PR #2727 in HEAD), ATOM pin `f8453e3`. GPUs reduced to 4 (0-3) at ~05:25 UTC after Kimi reclaimed 4-7.
+
+**Next**: PB boot eager MTP=7 → PC cudagraph + bench → PD GSM8K → PE commit if 4/4.
+
+Memory: [`memory/project_dsr1_session12_mtp7_pivot.md`](../../../.claude/projects/c--Users-danis-OneDrive-Desktop-AMD/memory/project_dsr1_session12_mtp7_pivot.md)
+
+---
+
+**Session-10 baseline (P0 lock):**
 
 **Mission**: pass 4/4 CONC=4 gates at `amd/DeepSeek-R1-0528-MXFP4` on 4× MI355X, TP=4 single-replica.
 

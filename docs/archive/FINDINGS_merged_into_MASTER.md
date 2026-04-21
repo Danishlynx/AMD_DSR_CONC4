@@ -1,7 +1,57 @@
 # MASTER_FINDINGS — AMD Phase 2 Hackathon
-## Last Updated: 2026-04-20 session-10 — P0-P8 KERNEL CAMPAIGN LOCKED, bottleneck VALIDATED
+## Last Updated: 2026-04-21 session-12 — MTP=7 PIVOT (research-driven plan rewrite)
 
-## 🎯 SESSION-10 BREAKTHROUGH (Apr 20): BOTTLENECK DEFINITIVELY IDENTIFIED
+## 🚨 SESSION-12 PIVOT (Apr 21): HK QSEQLEN=5 PATH DEAD, SWITCH TO MTP=7 NON-PERSISTENT
+
+**Three findings in one session change the entire path forward**:
+
+### Finding 1 — Slot B P5 EAGER MTP=4 crashes too (kernel hypothesis falsified)
+At 04:49 UTC today, `--enforce-eager --num-speculative-tokens 4 + AITER_ENABLE_HK_QH32=1` crashed with "Memory access fault, Reason: Unknown" during model warmup, BEFORE cudagraph capture. This falsifies the "kernel works in eager, only cudagraph allocator fails" hypothesis from session-11. The qseqlen=5 path is broken at multiple levels — not a buffer-sizing issue alone.
+
+### Finding 2 — AITER PR #2727 already in our HEAD, AMD's path is precompiled-ASM not HipKittens
+- PR #2727 (merged 2026-04-17): adds `mla_a16w16_qh32_qseqlen4_gqaratio32_ps.co` for gfx950 + opens predicate `(nhead*max_seqlen_q)%128==0`
+- We're on aiter HEAD `73ad002` (Apr 17 21:14 UTC+8) — PR #2727 IS APPLIED in our container (verified `hsa/gfx950/mla/mla_asm.csv` has both fp8 and bf16 qh32_qseqlen4 entries)
+- Implication: AMD's official path forward is precompiled-ASM-folded-to-qh32_qseqlen4, NOT HipKittens qh32 ports. Only ONE commit ever touches `csrc/kernels/mla/hk/` (the original h128 add). **HipKittens qh32 surgery is swimming against AMD's stream.**
+
+### Finding 3 — vLLM PR #39616 (merged YESTERDAY 2026-04-20) — production MI355X spec=7 pattern
+- Merged 2026-04-20 by `larryli2-amd` (same engineer who filed AITER #2720)
+- Tested on MI355X TP=4 Kimi-K2.5-MXFP4 + Eagle3 spec=7 → **+76% tok/s**
+- The mechanism: `if max_qo_len == 1: get_mla_metadata_v1(...); has_persistent_metadata = True; else: has_persistent_metadata = False`. forward then conditionally passes work_*/reduce_* kwargs only when persistent metadata exists.
+- When skipped, AITER kernel internally falls back to `mla_decode_stage1_asm_fwd` non-persistent path which DOES support qseqlen > 1 (modulo #2720 pow-2 constraint)
+- ATOM equivalent dispatcher at `/app/ATOM/atom/model_ops/attention_mla.py:568-587` ALREADY scaffolds the toggle for the DP>1 case — we just extend the predicate by 1 line
+
+### Finding 4 — AITER #2720 pow-2 silent-corrupt rule (CRITICAL DEAD-END MAP)
+- `mla_decode_stage1_asm_fwd` non-persistent FP8 path SILENTLY broadcasts position-0 at non-pow-2 qseqlen
+- Filer's empirical evidence: `num_spec=5` (qseqlen=6, non-pow2) gives accept = 0.993 × 5 (the broadcast tell); `num_spec=7` (qseqlen=8, pow2) gives normal decreasing 0.730→0.394
+- **Working FP8 qseqlen**: {1, 2, 3, 4, 8} → spec ∈ {0, 1, 2, 3, 7}
+- **DEAD silent-corrupt**: {5, 6, 7} → spec ∈ {4, 5, 6}
+- No FP8 qh32_qseqlen8 PS kernel exists (#2760 open, no AMD ETA)
+
+### What this overturns from session-10/11
+- ❌ HK qseqlen=5 kernel surgery (P5-A oracle, P5-C preprocessor, P5-B LDS) — wrong target. Bug isn't kernel-level alone; it's the full metadata-builder fold pattern AMD has stopped supporting at qseqlen > 4
+- ❌ HK qh32 port for any qseqlen ∈ {5, 6, 7} — even if compiled correctly, output is silently broadcast pos-0 per #2720
+- ❌ HK qh32 port for qseqlen=8 — could work but is now PG (3-5 days, multi-day fallback only after PA-PF tried)
+- ✅ The 1-line ATOM patch (vLLM PR #39616 mirror) — applied Apr 21 05:30 UTC
+- ✅ MTP=7 (qseqlen=8 pow-2) is the ONLY viable spec > 3 path. No MTP=4/5/6 attempts.
+
+### Active campaign — phases PA-PG
+| Phase | Wall | What |
+|---|---|---|
+| PA ✅ | 30min | 1-line patch applied |
+| PB | 45min | Boot eager `--num-speculative-tokens 7` smoke test |
+| PC | 30min | Cudagraph + 3× perf bench |
+| PD | 20min | 3× GSM8K acc bench |
+| PE | 15min | If 4/4 → docker commit + push `dsr_best_P5_mtp7_4of4` |
+| PF | 4-6h | Stack BF16 CSV + #27224 + TRITON_GEMM + #24097 if 3.5/4 |
+| PG | 3-5d | HK qh32 qseqlen=8 port (last resort) |
+
+**Plan**: [`../../.claude/plans/fizzy-toasting-teacup.md`](file:///C:/Users/danis/.claude/plans/fizzy-toasting-teacup.md)
+**Memory**: [`memory/project_dsr1_session12_mtp7_pivot.md`](../../../.claude/projects/c--Users-danis-OneDrive-Desktop-AMD/memory/project_dsr1_session12_mtp7_pivot.md)
+**Cached PR diffs**: `C:\Users\danis\tmp_research\pr2727.diff`, `pr39616.diff`, `pr27380.diff`, `pr36574.diff`
+
+---
+
+## 🎯 SESSION-10 BREAKTHROUGH (Apr 20, partially superseded by session-12): BOTTLENECK DEFINITIVELY IDENTIFIED
 
 **After 10 sessions of debugging, the REAL bottleneck is identified and VALIDATED** (V1/V4/V5 overlap parsers, not hypothesis):
 
