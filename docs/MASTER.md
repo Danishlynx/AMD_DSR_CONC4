@@ -161,28 +161,69 @@ Gate 1500. Gap narrowed from **-234 → -148 thr/GPU** (-9.9%). Still needs more
 
 **KEEP** this lever regardless — throughput gain is real. Next: stack RE.2 BF16 hipBLASLt tuning on top.
 
-## RE.2 — BF16 hipBLASLt per-shape tuning (queued)
+## RE.2 — BF16 hipBLASLt per-shape tuning (Apr 22 15:43 UTC: in flight)
 
-15 unmatched shapes from boot log (M×N×K):
-```
-4,7168,4096
-6,32320,7168
-8,6144,1536
-8,7168,4096
-8,32320,7168
-64,2112,7168
-64,6144,1536
-64,7168,4096
-61440,256,7168
-61440,2112,7168
-8193,256,7168
-8193,512,8192
-8193,1536,6144
-8193,2112,7168
-8193,4096,7168
-```
+15 unmatched shapes from boot log (M×N×K) — deployed to `reproducer_best:/tmp/bf16_shapes.csv`.
 
-Tuner: `/app/aiter-test/csrc/ck_batched_gemm_bf16/batched_gemm_bf16_tune.py` (batched variant) or equivalent non-batched tuner TBD.
+**Tuner choice**: `aiter/ops/gradlib.py` direct API (`hipb_findallsols`, `hipb_mm`) via custom script `reproducer_best:/tmp/custom_bf16_tuner.py`. gradlib's `gemm_tuner.py` fails with ImportError (hipb_create_extension was moved to `aiter.ops.gradlib` sub-module).
+
+**Process**:
+1. Container restart (kill server, clear VRAM) — done 15:41 UTC
+2. Launch tuner on HIP_VISIBLE_DEVICES=0 (single GPU while server is down) — started 15:43 UTC
+3. For each shape: `hipb_findallsols` → enum all candidate sol_idx → warmup 10 + time 30 iters → pick best
+4. Output CSV in aiter bf16_tuned_gemm.csv format (cols: gfx,cu_num,M,N,K,bias,dtype,outdtype,scaleAB,bpreshuffle,libtype,solidx,splitK,us,kernelName,err_ratio,tflops,bw)
+5. Merge into `/tmp/aiter_configs/bf16_tuned_gemm.csv`
+6. Cold-boot server with merged CSV + INT4 AR env still active
+7. Full wrapper bench (GSM8K + perf)
+
+Expected time: 30 min - 2 hours depending on #solutions per shape (~50-300 candidates typical).
+
+### RE.2 tuner result (15:43-16:04 UTC, 21 min)
+
+All 15 shapes tuned. Each shape had 1266-1269 candidate sol_idx evaluated:
+
+| M | N | K | sol_idx | µs | TFLOPS | BW GB/s |
+|---:|---:|---:|---:|---:|---:|---:|
+| 4 | 7168 | 4096 | 438666 | 14.16 | 16.59 | 4154 |
+| 6 | 32320 | 7168 | 438157 | 67.89 | 40.95 | 6832 |
+| 8 | 6144 | 1536 | 438426 | 11.15 | 13.54 | 1703 |
+| 8 | 7168 | 4096 | 438666 | 14.44 | 32.53 | 4078 |
+| 8 | 32320 | 7168 | 438157 | 67.72 | 54.74 | 6851 |
+| 64 | 2112 | 7168 | 437678 | 14.69 | 131.87 | 2141 |
+| 64 | 6144 | 1536 | 438459 | 11.23 | 107.56 | 1768 |
+| 64 | 7168 | 4096 | 437958 | 15.75 | 238.64 | 3820 |
+| 61440 | 256 | 7168 | 437611 | 167.09 | 1349.51 | 5482 |
+| 61440 | 2112 | 7168 | 437862 | 1197.46 | 1553.50 | 978 |
+| 8193 | 256 | 7168 | 437803 | 39.64 | 758.63 | 3162 |
+| 8193 | 512 | 8192 | 438620 | 64.63 | 1063.47 | 2337 |
+| 8193 | 1536 | 6144 | 437778 | 96.72 | 1598.87 | 1496 |
+| 8193 | 2112 | 7168 | 438570 | 171.84 | 1443.59 | 1061 |
+| 8193 | 4096 | 7168 | 437778 | 313.67 | 1533.75 | 776 |
+
+Merged into `/tmp/aiter_configs/bf16_tuned_gemm.csv` (786→801 rows).
+
+### RE.2 bench first batch (16:20-16:25 UTC)
+
+Server cold-booted 16:06→16:19 UTC with tuned CSV + RE.1 INT4 AR env active.
+
+| Run | Total Thr | Thr/GPU | Mean TPOT | Median TPOT |
+|---|---:|---:|---:|---:|
+| 1 | 5527 | 1382 | 6.02 ms | 6.03 ms |
+| 2 | 5555 | **1389** | 6.02 ms | 6.11 ms |
+| 3 | 5327 | 1332 | 6.26 ms | 6.46 ms |
+| min | 5327 | 1332 | — | — |
+| avg | 5470 | 1368 | 6.10 | 6.20 |
+
+Variance high (runs 1-2 at ~1385, run 3 at 1332 — probably DVFS/scheduler noise).
+
+Comparison to stack so far:
+- Baseline (FP AR, no tune): 1266 min / 6.46 ms
+- +INT4 AR: 1352 min / 6.23 ms (+6.8%)
+- +INT4 AR +BF16 tune: 1368 avg / 6.10 ms mean — small win vs RE.1 (~+1.2% avg, -0.13 ms mean TPOT)
+
+Not-found count during capture phase: 68 (was 15 at boot). So many cudagraph-capture-time shapes exist beyond our 15. Only ~22% coverage. More shapes to tune (possible RE.2b — expand shape extraction to capture-time shapes).
+
+Re-running 3 more for variance stability.
 
 ## RE.3 — MoE CSV expansion (queued)
 

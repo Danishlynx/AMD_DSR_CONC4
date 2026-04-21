@@ -1,0 +1,16 @@
+M,N,K,bias,dtype,outdtype,scaleAB,bpreshuffle
+4,7168,4096,False,torch.bfloat16,torch.bfloat16,False,False
+6,32320,7168,False,torch.bfloat16,torch.bfloat16,False,False
+8,6144,1536,False,torch.bfloat16,torch.bfloat16,False,False
+8,7168,4096,False,torch.bfloat16,torch.bfloat16,False,False
+8,32320,7168,False,torch.bfloat16,torch.bfloat16,False,False
+64,2112,7168,False,torch.bfloat16,torch.bfloat16,False,False
+64,6144,1536,False,torch.bfloat16,torch.bfloat16,False,False
+64,7168,4096,False,torch.bfloat16,torch.bfloat16,False,False
+61440,256,7168,False,torch.bfloat16,torch.bfloat16,False,False
+61440,2112,7168,False,torch.bfloat16,torch.bfloat16,False,False
+8193,256,7168,False,torch.bfloat16,torch.bfloat16,False,False
+8193,512,8192,False,torch.bfloat16,torch.bfloat16,False,False
+8193,1536,6144,False,torch.bfloat16,torch.bfloat16,False,False
+8193,2112,7168,False,torch.bfloat16,torch.bfloat16,False,False
+8193,4096,7168,False,torch.bfloat16,torch.bfloat16,False,False
