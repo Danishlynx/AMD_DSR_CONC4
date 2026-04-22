@@ -1,6 +1,18 @@
 # DSR1 CONC=4 — REPRODUCE (reproduction recipe)
 
-**Last updated**: 2026-04-22 session-14 end-of-day — **RE.1 INT4 AR is current best submittable config**
+**Last updated**: 2026-04-22 session-15 RE.4c — v8 kernel built but HK path is -37% vs ASM; **RE.1 ASM remains best submittable**
+
+## Session-15 session summary (Apr 22-23)
+- Built `v8_h32_working.cuh` = v7 + Opt-E `s_setprio` coverage. Compiled, bit-exact at sq∈{1,4}. Bench: 855 tok/s/GPU via HK path (-37% vs ASM, matches session-14 RE.4a). Opt-E gave 0 gain.
+- sq=8 unlock blocked on metadata architecture (virtual-nhead-16 fold at sq=8 fp8/fp8; VGPR+LDS budgets infeasible for internal loop).
+- Container `re4c_v8` spawned from `dsr1_RE1_int4_ar_validated_apr22` on 4 GPUs (0-3, Kimi has 4-7). Snapshot saved: `rocm/atom-dev:dsr1_session15_v8_kernel_apr22` (b724d5f60d66).
+- Git commit `b82be22` on branch `session14_wrapper_reasoning_int4_ar_win`. v9 spec in `RE4_hk_qh32/v9_DESIGN.md` (16x16x128 MFMA rewrite, 1.5-2 days next session).
+
+**To reproduce RE.1 from session-15 container**: `docker exec re4c_v8 bash /tmp/p0_launch_profiled.sh` (RE.1 envs, no HK). The `/tmp/p0_launch_v8.sh` variant enables HK v8 but is -37% so not production.
+
+---
+
+
 
 ## 🏆 CURRENT BEST SUBMITTABLE: RE.1 INT4 AllReduce (session-14)
 

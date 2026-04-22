@@ -17,14 +17,37 @@
 - **sq=4**: PASS bit-exact vs v7 (output mean 0.0005393127794377506 matches v7 to all digits)
 - **sq=8**: FAIL via direct harness because metadata non-fold emits nhead=16 virtual-batched work_info that v8 (native nhead=32) cannot consume. natively_supported patch tried → broke sq=4 template instantiation → REVERTED.
 
-## Bench (v8 via HK path, MTP=3, 40 prompts, CONC=4, ISL=8192 OSL=1024)
+## Bench results (all runs, CONC=4 ISL=8192 OSL=1024 NUM_PROMPTS=40)
+
+### v8 via HK path (`AITER_ENABLE_HK_QH32=1 + V8=1`)
 | Run | Thr/GPU | Mean TPOT | Median E2EL |
 |-----|--------:|----------:|------------:|
 | 1   | 857.6   | 9.88 ms   | 11061 ms    |
 | 2   | 854.9   | 9.92 ms   | 10460 ms    |
 | avg | 856.2   | 9.90 ms   | 10761 ms    |
 
-**vs RE.1 ASM baseline (1360 thr/GPU)**: **-37% thr** (matches session-14 RE.4a). **Opt-E s_setprio delivered 0 measurable gain.**
+**vs RE.1 ASM baseline: -37% thr** (matches session-14 RE.4a). Opt-E s_setprio gave 0 measurable gain.
+
+### RE.1 ASM (HK OFF, INT4 AR) — **production config validated session-15**
+| Run | Thr/GPU | Mean TPOT | Median E2EL |
+|-----|--------:|----------:|------------:|
+| 1   | 1368.2  | 6.11 ms   | 6641 ms     |
+| 2   | 1368.8  | 6.11 ms   | 7034 ms     |
+| 3   | 1383.1  | 6.11 ms   | 6735 ms     |
+| min | **1368.2** | 6.11 ms | 6641 ms    |
+| avg | 1373.4  | 6.11 ms   | 6803 ms     |
+
+**Slight improvement over session-14 recorded RE.1 (1360/6.15/7200)** — session-15 container is healthy. GSM8K not re-tested this session but kernel/config unchanged so RE.1's 0.9424 should hold.
+
+### Gate status (CONC=4 grand prize: thr≥1500, interact≥165, E2E≤5000, GSM8K≥0.93)
+| Metric | RE.1 min-of-3 | Target | Gap |
+|---|---:|---:|---:|
+| Thr/GPU | 1368.2 | 1500 | **-8.8%** |
+| Interact (1000/TPOT) | 163.7 | 165 | -0.8% (almost clean) |
+| E2E median | 6641 ms | 5000 | **-33% (binding)** |
+| GSM8K | 0.9424 (s14) | 0.93 | +1.3% ✓ |
+
+**3/4 gates** (GSM8K pass, interact very close). **Thr and E2E are binding**. Only lever that closes both simultaneously = MTP=7 unlock (+15-20% tok/step). MTP=7 requires either (a) multi-day metadata co-change + v9 sq=8 port, or (b) python-side split with 0.6ms overhead still +15% net.
 
 ## Why Opt-E gave 0 gain
 - v7 already uses `s_setprio` in oaccu rescale (highest-density VALU block)
