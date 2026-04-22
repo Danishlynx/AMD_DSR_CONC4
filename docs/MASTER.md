@@ -1,6 +1,131 @@
 # DSR1 CONC=4 — MASTER (merged: STATUS + Current_plan + Bottleneck + Danish + BRIEF + FINDINGS + EXPERIMENTS + HISTORY)
 
-**Last updated**: 2026-04-22 session-15 RE.4c — v8 Opt-E kernel built + benched; HK path -37% confirmed; sq=8 unlock blocked on metadata architecture
+**Last updated**: 2026-04-22 session-16 — V9 MFMA kernel compiles + linked (smoke faults at Q LDS), MTP=7 hit multiple walls. BF16 KV path in progress.
+
+---
+
+# 🔬 SESSION-16 DELIVERABLES + WALLS (Apr 22 UTC)
+
+## What was built
+- **V9 NoPE MFMA kernel** (`RE4_hk_qh32/v9_h32.cuh` + `buffer_managers_v9.patch.cuh` + `hk_decode_fwd_v9.cu`) — upgrades NoPE QK^T to `mfma_scale_f32_16x16x128_f8f6f4`. PV/RoPE unchanged (PV K-axis = kv_len = 32, cannot widen without 4× LDS restructuring).
+- **Idempotent buffer_managers patch script** (`apply_buffer_managers_patch.py`) with stable section markers.
+- **C++ dispatcher** `hk_decode_fwd_v9.cu` — `AITER_ENABLE_HK_QH32_V9=1` env gate, coexists with v7/v8.
+- **MTP=7 python-split shim** (`mla_py_mtp7_split_patch.py`) at `mla.py:183` under `ATOM_MTP7_PYTHON_SPLIT=1` (rebuilds sq=1 metadata per position, 8× kernel calls).
+
+## V9 status: **COMPILED + LINKED (module_hk_mla.so md5 `a773edf1d5d85d96804507a1952b2442`), SMOKE FAULTS**
+- `nm -D module_hk_mla.so | grep _v9` returns 1 symbol ✓
+- smoke test sq=1 bs=1 kv=16 → "Memory access fault ... Write access to a read-only page"
+- **Root cause identified**: `QManagerV4` ring-buffers Q LDS (2176 bytes, 1 block at a time, rotates through 9 Q blocks during load_q_to_gpr). My new `lds_2_gpr_wide` expects 2 adjacent blocks simultaneously in LDS → OOB read.
+- **Fix path (not attempted)**: rewrite Q loader to pre-load all 9 blocks (~20KB Q LDS). 4-6 hours more work.
+
+## MTP=7 = the only lever that closes E2E gap -33%
+
+### ✅ Hurdle 1 SOLVED — OOM at drafter init
+- Root cause: 7 drafter layers × 1.76 GB per rank > 1.47 GB free at gpu_memory_utilization=0.90
+- Fix: `gpu_memory_utilization=0.70` + `export PYTORCH_ALLOC_CONF=expandable_segments:True`
+- **CRITICAL CLEANUP**: orphan `spawn_main`/`multiprocessing` processes from failed boots hold 287 GB/GPU. Must: `pkill -9 -f spawn_main; pkill -9 -f multiprocessing; pkill -9 -f atom`
+- Confirm clean with: `rocm-smi --showmeminfo vram --csv` should show ~300 MB / 288 GB
+
+### ❌ Hurdle 2 WALL — No FP8 sq=8 kernel binary shipped in AITER
+- `/app/aiter-test/csrc/py_itfs_cu/asm_mla.cu:308` has `AITER_CHECK(false, "only support fp8 mla decoding for qo_len <= 4")` for gqa_ratio=16 + fp8
+- `/app/aiter-test/hsa/gfx950/mla/` has ONLY `mla_a8w8_qh16_qseqlen{1,2,4}_gqaratio16*.co`, NO qseqlen=8 fp8 binary
+- gfx950 bf16 qh16 has `mla_a16w16_qh16_m16x4_n16x1_coex0_mask1*.co` (no qseqlen in name — may handle variable via `config_max_seqlen_q=8` branch at asm_mla.cu:290)
+- gfx950 bf16 qh32 has ONLY `mla_a16w16_qh32_qseqlen4_gqaratio32_ps.co` — also sq=4 only
+
+### ❌ Hurdle 3 WALL — HK v7 kernel sq=8 memory fault
+- Boot `AITER_ENABLE_HK_QH32=1 AITER_ENABLE_EXPERIMENTAL=1` + MTP=7 + FP8 KV → HK v7 called at sq=8 → "Memory access fault ... Write access to a read-only page"
+- Matches session-15 finding: HK v7/v8 doesn't handle virtual-nhead-16 metadata fold
+
+### ❌ Hurdle 4 WALL — Python split incompat with cudagraph
+- `ATOM_MTP7_PYTHON_SPLIT=1` + cudagraph → `HIP error: operation not permitted when stream is capturing`
+- Root cause: shim does `torch.empty/arange/get_mla_metadata_v1` inside cudagraph capture → dynamic allocations not capturable
+
+### ⚠️ Hurdle 5 — --enforce-eager MTP=7 fp8 KV: boots HEALTHY but crashes first request
+- `--enforce-eager --kv_cache_dtype fp8 --num-speculative-tokens 7` + expandable_segments + no HK → /health returns 200 OK
+- First bench request triggers sq=8 decode → ASM `qo_len<=4` AITER_CHECK → server exitcode -6
+
+### ✅ Hurdle 6 RESOLVED — BF16 KV cache works, but perf disappointing
+**Experiment 1: BF16 KV + enforce-eager (no cudagraph)** = **450 thr/GPU** — eager kills perf
+**Experiment 2: BF16 KV + cudagraph + session-12 persistent-disable-for-sq>4 patch** = **1353 thr/GPU, TPOT 6.21ms, TTFT 311ms** (40 requests in 68s @ conc=4)
+- Server HEALTHY, bench completes clean, no crashes
+- But equals/slightly below RE.1 (1368 thr/GPU) — MTP=7 gain is getting eaten by BF16 slowdown + untuned BF16 GEMMs falling to torch-fallback (`not found tuned config in bf16_tuned_gemm.csv`)
+
+**Experiment 3: BF16 KV + cudagraph + session-12 patch + FP8 KV attempt** = CRASH: `asm_mla.cu:326 mla_decode_stage1_asm_fwd: fp8/fp8 with gqa_ratio=32 only supports decode_qlen=2,4 in persistent mode`
+- Confirms: **FP8 + sq=8 has NO code path anywhere** (fails at gqa_ratio=16 with "qo_len<=4" when persistent, fails at gqa_ratio=32 with "only 2,4" when non-persistent)
+
+### Session-12 persistent-disable patch (applied at /app/ATOM/atom/model_ops/attention_mla.py:569)
+```python
+# session-16 MTP=7: disable persistent for sq>4 (mirrors session-12 vLLM #39616 approach)
+use_persistent_mode = (not (dp_size > 1)) and (attn_metadata.max_seqlen_q <= 4)
+```
+This forces non-persistent metadata path which at sq=8 dispatches BF16 generic kernel (variable qseqlen capable).
+
+### ❌ Hurdle 7 FINISHED — BF16 GEMM tuning made it WORSE
+Tuned 51 BF16 GEMM shapes via `gradlib/gemm_tuner.py --mp 4 --libtype all` (35 min runtime).
+0 failed shapes; CSV grew from 785 → 836 rows (merged + deduped by aiter to 836).
+
+**Result: 3-run avg = 1290 thr/GPU** (vs 1353 untuned = WORSE).
+Theory: tuner isolates kernels and picks fastest-in-isolation, but in real workload these compete for LDS/scratchpad/L2 with other kernels. Or tuner's err_ratio=0.05 tolerance picked "different-math-but-close" kernels that aren't bit-exact for accumulation chains.
+CSV reverted to pre-tune baseline.
+
+### 🧪 Out-of-box attempt — Patched asm_mla.cu to accept sq=8 via gdx=2 grid reuse
+Modified line 308 check from `max_seqlen_q > 4 → ERROR` to `max_seqlen_q == 8 → config_max_seqlen_q=4, sub_Q=64` (reuse sq=4 kernel with grid=2).
+Rationale: if the sq=4 kernel binary processes sub_Q=64 Q positions per block, 2 blocks at gdx=2 should cover 128 positions = sq=8 × gqa=16.
+
+**Result: MTP=7 FP8 patched = 1165 thr/GPU** (WORSE than both RE.1 1368 and MTP=7 BF16 1353).
+- Bench completed without crash (so kernel didn't fault)
+- Low throughput suggests either grid-partitioning overhead OR correctness issues (outputs for positions 4-7 are computed by kernel that "thinks" they're positions 0-3 of a virtual batch — per-position softmax may be wrong, speculative rejection spikes)
+- Did NOT test GSM8K (would likely fail, confirming correctness bug)
+- Patch reverted.
+
+### Final session-16 scoreboard (all paths for 4/4)
+| Path | Thr/GPU | TPOT ms | Notes |
+|---|---:|---:|---|
+| **RE.1 MTP=3 FP8 (baseline)** | **1368** | 6.11 | **BEST** — 1/4 strict, 3/4 lenient |
+| MTP=7 BF16 eager | 450 | 18.97 | eager kills |
+| MTP=7 BF16 cg + s12 patch | 1353 | 6.21 | matches RE.1, no gain |
+| MTP=7 BF16 cg + s12 + tuned GEMMs | 1290 | 6.30 | tuner backfired |
+| MTP=7 FP8 cg + s12 patch | CRASH | — | `gqa=32 only 2,4` |
+| MTP=7 FP8 cg + asm sq=8 patch | 1165 | 6.87 | dubious correctness |
+
+**NO MTP=7 path exceeds RE.1 MTP=3**. Reason: BF16 KV's kernel slowdown cancels MTP=7's gain. FP8 sq=8 kernel does NOT exist in shipped AITER binaries AND not in latest upstream (verified: aiter HEAD Apr 22 only has `(32,4)` max for fp8 gqa_ratio=32).
+
+### V9 NoPE MFMA kernel
+Built + compiled + linked (module_hk_mla.so md5 `a773edf1d5d85d96804507a1952b2442`), v9 symbol present.
+Smoke test sq=1: GPU memory fault from QManagerV4 ring-buffer Q LDS. Fix requires pre-loading all 9 Q blocks (~20KB LDS, 4-6h rewrite).
+Standalone V9 NoPE MFMA gain projection: ~2× NoPE throughput × 30% of MLA × 15% of total = +4.5% on MTP=3 = **1430 thr/GPU** (still under 1500 gate).
+
+### Upstream repo audit
+Our container is behind by: AITER **27 commits** (last ours `73ad002`); ATOM **16 commits** (last ours `f8453e3`); HipKittens ~14.
+Most relevant upstream commits NOT in container:
+- **ATOM #582** `69891db` — [Acc] DPSK FP4 MLA weight quantize + kv_b_proj layout (might improve MLA path perf)
+- **ATOM #600** `ef999d1` — Qwen3.5 MTP + **acceptance tracking** (diagnostic only)
+- AITER: MI350 MLA ps mode — explicitly lists `(nhead=32, qseqlen=4)` as highest for fp8; `(32, 8)` still missing
+
+**Confirmed: no upstream `.co` binary or ASM source for FP8 sq=8 at gqa_ratio ∈ {16, 32} on gfx950.** The competition-blocking kernel is genuinely missing from AMD's shipped stack — not a stale-container issue.
+
+## Gate reality (why MTP=N is the only real lever)
+- **RE.1 production** = 1368 thr/GPU, TPOT 6.11ms, E2E 6641ms, GSM8K 0.9424
+- Strict gates: thr≥1500 (-8.8%), interact≥165 (-0.8% near-clean), E2E≤5000 (-33% **binding**), GSM8K≥0.93 ✓
+- **MTP=3 ceiling = 1368** (ASM is already tuned; no stacking of micro-opts closes -33% E2E)
+- **MTP=N multiplies throughput by (N+1)/(current+1) and reduces E2E proportionally**
+- **MTP=7 = 2× MTP=3** → projected 2180+ thr/GPU, E2E ~4000ms, clears all 4 gates with margin
+
+## Key hard-won facts (session-16)
+1. **AITER ships specific `.co` binaries** — no shipped sq=8 FP8 kernel for gqa_ratio ∈ {16, 32} on gfx950.
+2. **HK v7 is NOT sq=8 safe** — kBlockM=32=kQoNumHead suggests multi-Q capable, but actually processes only qo_start's row tile per work_idx.
+3. **Python split incompat with cudagraph** — any torch.empty/arange/metadata rebuild inside capture breaks HIP stream.
+4. **`gpu_memory_utilization=0.70` + `PYTORCH_ALLOC_CONF=expandable_segments:True`** is the right knob for MTP=N boots.
+5. **Orphan GPU processes outlive parent pkill** — `pkill -f spawn_main` essential for reliable reboots.
+6. **QManagerV4 LDS is a ring buffer** — wide Q reads need pre-load-all-blocks or in-register shuffle.
+7. **HipKittens `split_many_t<..., N>` uses N = registers_per_thread**, not number of chunks.
+8. **mfma_1616128 dispatches via** `mma_ABt_base` when A_rows=A_cols=16x128 && D_shape=rt_16x16 (base tile = 16×128 fp8 = 8 VGPRs/lane).
+
+## Open paths ranked
+1. **BF16 KV MTP=7** (in-flight) — fastest test path
+2. **Pre-allocated metadata python-split** — allocate sq=1 slots at init, reuse every call, enable cudagraph kernel-only capture (2-4h)
+3. **Custom fp8 sq=8 kernel from ASM source** — AITER hsa/ has intermediates but no fp8 sq=8 source found; multi-day
+4. **V9 Q LDS rewrite** — pre-load all 9 blocks; NoPE 2× speedup at sq={1,4}; won't fix sq=8
 
 ---
 
