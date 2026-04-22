@@ -1,0 +1,49 @@
+--- a/app/aiter-test/aiter/mla.py	(session-14 baseline: v7 qh32 gated by AITER_ENABLE_HK_QH32)
++++ b/app/aiter-test/aiter/mla.py	(session-15 v8: adds qh32 v8 gate supporting max_seqlen_q ∈ {1,2,4,8})
+@@ -430,6 +430,17 @@
+         use_hk = (
+             nhead == 128
+             and q.dtype == dtypes.fp8
+             and kv_buffer.dtype == dtypes.fp8
+             and page_size == 1
+             and os.getenv("AITER_ENABLE_EXPERIMENTAL", False)
+         )
++
++        # session-15 RE.4c: HK qh32 v8 gate.
++        # v8 = v7 + inner q_pos loop over [qo_start, qo_end) + s_setprio coverage.
++        # Handles max_seqlen_q ∈ {1,2,4,8} correctly at nhead=32 fp8/fp8.
++        # At sq=8, unlocks DSR1 MTP=7 (requires server's MTP setting to be 7).
++        use_hk_v8 = (
++            nhead == 32
++            and os.getenv("AITER_ENABLE_HK_QH32_V8", "0") == "1"
++            and q.dtype == dtypes.fp8
++            and kv_buffer.dtype == dtypes.fp8
++            and page_size == 1
++            and os.getenv("AITER_ENABLE_EXPERIMENTAL", False)
++            and max_seqlen_q in (1, 2, 4, 8)
++        )
+@@ -442,6 +453,24 @@
+         if use_hk:
+             from aiter import hk_mi3xx_mla_v32_fwd_decode_h128_fp8_fp8
+             return hk_mi3xx_mla_v32_fwd_decode_h128_fp8_fp8(
+                 q, kv_buffer, qo_indptr, kv_indptr,
+                 kv_page_indices, kv_last_page_lens,
+                 work_indptr, work_info_set, max_seqlen_q,
+                 softmax_scale, split_output, split_lse, final_output,
+             )
++
++        if use_hk_v8:
++            from aiter import hk_mi3xx_mla_v32_fwd_decode_h32_fp8_fp8_v8
++            return hk_mi3xx_mla_v32_fwd_decode_h32_fp8_fp8_v8(
++                q, kv_buffer, qo_indptr, kv_indptr,
++                kv_page_indices, kv_last_page_lens,
++                work_indptr, work_info_set, max_seqlen_q,
++                softmax_scale, split_output, split_lse, final_output,
++            )
++
++        # IMPORTANT: at sq=8 fp8/fp8 nhead=32, aiter main's get_mla_metadata_v1
++        # emits ONE work_info per batch with qo_end-qo_start=8. The non-v8
++        # ASM persistent kernels DO NOT handle qo_end-qo_start > 4 (no .co
++        # registered in hsa/gfx950/mla/mla_asm.csv for fp8/fp8 sq=8). If
++        # AITER_ENABLE_HK_QH32_V8=0 at sq=8, caller will crash — matches
++        # session-14 RE.4b observation. The v8 gate is REQUIRED for MTP=7.

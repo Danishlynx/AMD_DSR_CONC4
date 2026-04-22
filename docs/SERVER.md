@@ -28,9 +28,21 @@ Launch script `/tmp/p0_launch_profiled.sh` on `reproducer_best` has:
 | `dsr1_P0_3of4_gates_apr20` | `02e27b1ebcac` | Original gold (FP AR, pre-wrapper discovery) |
 | `dsr1_session13_safety_apr21` | `5609a374e6cf` | Safety snapshot after session-13 |
 | `dsr1_RE1_int4_ar_apr22` | `332d04c6f527` | RE.1 INT4 AR first commit |
-| `dsr1_RE1_int4_ar_validated_apr22` | `e7259e3c94c1` | RE.1 post-sanity, CURRENT GOOD STATE |
+| `dsr1_RE1_int4_ar_validated_apr22` | `e7259e3c94c1` | RE.1 post-sanity, **CURRENT GOLD STATE** |
 
 To restore production: `docker run --rm -it rocm/atom-dev:dsr1_RE1_int4_ar_validated_apr22` → run `/tmp/p0_launch_profiled.sh`.
+
+## Session-15 container: `re4c_v8`
+
+Created 2026-04-22 session-15 from `dsr1_RE1_int4_ar_validated_apr22` image.
+- 4 GPUs explicitly mounted (renderD128, D136, D144, D152) — GPUs 0-3 physical; Kimi has GPUs 4-7
+- Port 8895 (host) → 8890 (container)
+- Mounts: `/home/hackathon`, `/projects` (same as reproducer_best)
+- v8 kernel symbol `kn_mla_v32_fwd_decode_h32_fp8_fp8_v8` compiled into `/app/aiter-test/aiter/jit/module_hk_mla.so` (md5 `1e2f6261f6639b2c9b95c9485eb122c1`)
+- Launch variants:
+  - `/tmp/p0_launch_profiled.sh` — RE.1 ASM path (no HK, 1360 thr/GPU expected)
+  - `/tmp/p0_launch_v8.sh` — RE.1 + `AITER_ENABLE_HK_QH32=1` + `AITER_ENABLE_HK_QH32_V8=1` (855 thr/GPU = -37%; do NOT use for production)
+- Rollback: `docker exec re4c_v8 cp /app/aiter-test/aiter/mla.py.pre_v8 /app/aiter-test/aiter/mla.py && cp /app/aiter-test/csrc/kernels/mla/hk_decode_fwd.cu.pre_v8 /app/aiter-test/csrc/kernels/mla/hk_decode_fwd.cu`
 
 ---
 

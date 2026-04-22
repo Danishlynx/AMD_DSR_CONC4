@@ -1,0 +1,18 @@
+--- /app/aiter-test/csrc/cpp_itfs/mla/hk_decode_fwd.cu  (session-14)
++++ /app/aiter-test/csrc/cpp_itfs/mla/hk_decode_fwd.cu  (session-15 v8)
+@@
+ // Keep session-14 v7 symbol unchanged — append v8 below.
+ #include "mi3xx_v32_fwd_decode_h128_fp8_fp8.cuh"  // existing
+ #include "mi3xx_v32_fwd_decode_h16_fp8_fp8.cuh"   // Phase 1 qh16
+ #include "mi3xx_v32_fwd_decode_h32_fp8_fp8.cuh"   // session-14 v7 qh32
++#include "mi3xx_v32_fwd_decode_h32_fp8_fp8_v8.cuh"  // session-15 v8 qh32 (sq=1,2,4,8)
+@@
+ // existing pybind registrations for v7 and h128/h16 unchanged
+
++// session-15 RE.4c: register v8 symbol
++PYBIND11_MODULE(module_hk_mla, m) {
++    // ... other entries unchanged ...
++    m.def("hk_mi3xx_mla_v32_fwd_decode_h32_fp8_fp8_v8",
++          &hk_mi3xx_mla_v32_fwd_decode_h32_fp8_fp8_v8,
++          "HK MLA decode fwd — qh32 v8 (sq ∈ {1,2,4,8}, inner q_pos loop + Opt-E s_setprio)");
++}

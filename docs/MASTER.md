@@ -1,6 +1,73 @@
 # DSR1 CONC=4 — MASTER (merged: STATUS + Current_plan + Bottleneck + Danish + BRIEF + FINDINGS + EXPERIMENTS + HISTORY)
 
-**Last updated**: 2026-04-22 session-14 14:20 UTC — reasoning-mode bottleneck PROFILED
+**Last updated**: 2026-04-22 session-15 RE.4c — v8 Opt-E kernel built + benched; HK path -37% confirmed; sq=8 unlock blocked on metadata architecture
+
+---
+
+# 🔬 SESSION-15 RE.4c DELIVERABLES (Apr 22-23 UTC)
+
+## What was built (offline, compiled, validated on server)
+- **v8 HK qh32 kernel** = v7 + Opt-E `s_setprio(14)/(0)` coverage around PV MFMA (2 sites). `v8_h32_working.cuh` 837 LOC.
+- **C++ dispatcher** `hk_decode_fwd_v8.cu` — `AITER_ENABLE_HK_QH32_V8=1` env gate, coexists with v7.
+- **Test harness** `test_hk_qh32_v8_correctness.py` — sq∈{1,2,4,8} sweep.
+- **Design docs**: `RE4c_DESIGN.md` (v8 rationale + VGPR/LDS budget math), `v9_DESIGN.md` (16x16x128 MFMA rewrite spec for next session).
+
+## Correctness
+- **sq=1**: PASS bit-exact vs v7 (max_abs_diff = 0.0)
+- **sq=4**: PASS bit-exact vs v7 (output mean 0.0005393127794377506 matches v7 to all digits)
+- **sq=8**: FAIL via direct harness because metadata non-fold emits nhead=16 virtual-batched work_info that v8 (native nhead=32) cannot consume. natively_supported patch tried → broke sq=4 template instantiation → REVERTED.
+
+## Bench (v8 via HK path, MTP=3, 40 prompts, CONC=4, ISL=8192 OSL=1024)
+| Run | Thr/GPU | Mean TPOT | Median E2EL |
+|-----|--------:|----------:|------------:|
+| 1   | 857.6   | 9.88 ms   | 11061 ms    |
+| 2   | 854.9   | 9.92 ms   | 10460 ms    |
+| avg | 856.2   | 9.90 ms   | 10761 ms    |
+
+**vs RE.1 ASM baseline (1360 thr/GPU)**: **-37% thr** (matches session-14 RE.4a). **Opt-E s_setprio delivered 0 measurable gain.**
+
+## Why Opt-E gave 0 gain
+- v7 already uses `s_setprio` in oaccu rescale (highest-density VALU block)
+- My PV-MFMA additions had minimal ALU/MFMA overlap opportunity
+- **Real gap vs ASM = MFMA opcode width**: HK uses `mfma_f32_16x16x32_fp8_fp8` (rt_16x32_s); ASM uses `mfma_scale_f32_16x16x128_f8f6f4` (4× K-depth/call) + hand-scheduled
+
+## sq=8 architectural reality (BLOCKED this session)
+- At nhead=32 sq=8 fp8/fp8: metadata non-fold path emits 2× virtual-nhead-16 batches with qo_end-qo_start=8
+- v8 native nhead=32 layout cannot interpret virtual-nhead-16 work_info → GPU memory fault at bs>1
+- **VGPR budget** for internal qseqlen=8 loop with K/V LDS reuse: 8× oaccu = 1024 VGPR/lane (>256 budget) or 512KB LDS (>160KB). Infeasible.
+- **Viable paths** (next session):
+  - (a) Multi-day aiter C++ metadata co-change (new template path)
+  - (b) Python-side split: 8× sq=1 calls, +0.6ms launch overhead, still +15% net from MTP=7
+  - (c) v9 kernel redesign once 16x16x128 MFMA landed
+
+## Next priority: v9 = 16x16x128 MFMA rewrite (spec-in-hand, ready to code)
+- HipKittens has `mfma1616128` binding at `HipKittens/include/ops/warp/register/tile/mma.cuh:119` + `rt_16x128_s` type — feasible
+- Traits: `kBlockK=128` (from 32), kv_0/kv_1 tile → `rt_16x128_s`, num_nope_iter 8→2
+- VGPR budget: ~180/lane (fits 256 at kOccupancy=1)
+- LDS: new `load_k_to_gpr_wide<kColOffset=128>` reading 4× ds_read_b64 chained
+- **Estimated**: 1.5-2 days; expected -15-20% on MLA time (~18% of wall) = -3 to -5% TPOT overall
+- Then extend v9 to sq=8 natively → MTP=7 unlock path → clears 1500 gate
+
+## Production config (unchanged, stable at 3/4)
+**RE.1 ASM** remains best: 1360 thr/GPU, TPOT 6.15 ms, GSM8K 0.9424, 3/4 gates (E2E 7200ms is binding).
+- Set BOTH `AITER_QUICK_REDUCE_QUANTIZATION=INT4` AND `VLLM_ROCM_QUICK_REDUCE_QUANTIZATION=INT4`
+- `VLLM_ROCM_QUICK_REDUCE_CAST_BF16_TO_FP16=1`
+- P0 baseline envs: `AITER_ENABLE_VSKIP=0`, `ATOM_ENABLE_RELAXED_MTP=1`, `ATOM_DUAL_STREAM_MOE_TOKEN_THRESHOLD=1024`, `HIP_FORCE_DEV_KERNARG=1`, `HSA_NO_SCRATCH_RECLAIM=1`, `NCCL_MIN_NCHANNELS=16`
+- Launch: `--method mtp --num-speculative-tokens 3 --enable-tbo prefill --cudagraph-capture-sizes [1,2,4,8,16,32] --kv_cache_dtype fp8 --max-num-batched-tokens 65536 --max-model-len 10240`
+- **DO NOT set** `AITER_ENABLE_HK_QH32=1` — HK path is -37% slower than ASM at sq=4
+
+## Files + backup locations
+| Local (Windows) | Server backup dir | Container path (re4c_v8) |
+|---|---|---|
+| `RE4_hk_qh32/v8_h32_working.cuh` | `/projects/teamA/danish/re4c_v8_deliverables/` | `/app/aiter-test/csrc/kernels/mla/hk/mi3xx_v32_fwd_decode_h32_fp8_fp8_v8.cuh` |
+| `RE4_hk_qh32/hk_decode_fwd_v8.cu` | ↑ same | `/app/aiter-test/csrc/kernels/mla/hk_decode_fwd.cu` |
+| `RE4_hk_qh32/RE4c_DESIGN.md`, `v9_DESIGN.md` | ↑ same | (doc only) |
+| `RE4_hk_qh32/test_hk_qh32_v8_correctness.py` | ↑ same | `/tmp/test_hk_qh32_v8_correctness.py` |
+| `RE4_hk_qh32/patch_metadata_sq8.py`, `patch_v1_2_device_sq8.py` | ↑ same | `/tmp/` (applied then reverted) |
+| `RE4_hk_qh32/compile_hk_qh32_v8.sh` | ↑ same | `/tmp/p0_launch_v8.sh` (launch variant) |
+
+- Container: `re4c_v8` from `rocm/atom-dev:dsr1_RE1_int4_ar_validated_apr22` (4 GPUs 0-3; Kimi owns 4-7)
+- Rollback safety: v7 saved as `.pre_v8` everywhere; image `dsr1_RE1_int4_ar_validated_apr22` untouched
 
 ---
 
