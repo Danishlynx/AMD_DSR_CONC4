@@ -1,23 +1,79 @@
-# DSR1 CONC=4 — REPRODUCE (reproduction recipe, was best_reproduce.md)
+# DSR1 CONC=4 — REPRODUCE (reproduction recipe)
 
-**Last updated**: 2026-04-22 session-14 — wrapper/reasoning-mode regime identified
+**Last updated**: 2026-04-22 session-14 end-of-day — **RE.1 INT4 AR is current best submittable config**
 
-## 🚨 CRITICAL CORRECTION — gold numbers were non-reasoning-mode
+## 🏆 CURRENT BEST SUBMITTABLE: RE.1 INT4 AllReduce (session-14)
 
-The "3/4 gates at 1500+ thr/GPU" numbers reproduced by the commands below were measured via **direct bench** (`python3 -m atom.benchmarks.benchmark_serving`) WITHOUT `--use-chat-template`. The competition leaderboard wrapper (`dsr1_benchmark`) uses kimbochen's bench fork WITH `--use-chat-template`, which activates DSR1's reasoning mode (`<think>...</think>` generation) — ~14% slower per output token.
+**Wrapper-measured**: 1353-1365 thr/GPU avg, TPOT 6.15 ms, GSM8K 0.9424, E2E ~7200ms → **1/4 gates** (pass GSM8K only)
 
-**Under the actual leaderboard wrapper**: same P0 config gives **1291 thr/GPU** (1/4 gates, fails 1500 gate).
+Gate gap: -10% thr/GPU (need 1500), -3% interact (162 vs 165), -44% E2E (7200 vs 5000).
 
-Side-by-side proof (same warm server, 40 prompts each, --ignore-eos):
-- ATOM bench, no chat template: **1514 thr/GPU**, 5.42 ms TPOT
-- Kimbochen bench, **+chat-template** (wrapper): **1308 thr/GPU**, 6.32 ms TPOT
-- Kimbochen bench, no chat template: 1477 thr/GPU, 5.47 ms TPOT
+### Reproduce RE.1 in 3 steps
 
-The ~14% gap = ~11% reasoning-mode + ~2.4% tool difference.
+**1. Snapshot image**: `rocm/atom-dev:dsr1_RE1_int4_ar_validated_apr22` (ID `e7259e3c94c1`, 474GB). Includes all aiter modules, INT4 AR envs, validated model weights.
 
-**To reproduce submittable numbers** (competition wrapper): use SERVER.md § "Wrapper invocation". See MASTER.md § TOP for full analysis and kernel-level optimization targets.
+**2. Launch script `/tmp/p0_launch_profiled.sh`** (critical env + CLI):
+```bash
+export HOME=/tmp HF_HOME=/tmp/.cache/huggingface HUGGINGFACE_HUB_CACHE=/tmp/.cache/huggingface/hub
+export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1
+export AITER_ENABLE_VSKIP=0 ATOM_ENABLE_RELAXED_MTP=1 ATOM_DUAL_STREAM_MOE_TOKEN_THRESHOLD=1024
+export HIP_FORCE_DEV_KERNARG=1 HSA_NO_SCRATCH_RECLAIM=1 NCCL_MIN_NCHANNELS=16
+export HIP_VISIBLE_DEVICES=0,1,2,3 OMP_NUM_THREADS=1
+# THE KEY RE.1 CHANGES (from pre-RE.1 FP → INT4):
+export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION=INT4
+export VLLM_ROCM_QUICK_REDUCE_CAST_BF16_TO_FP16=1
+export AITER_QUICK_REDUCE_QUANTIZATION=INT4    # aiter actually reads THIS, not VLLM_ROCM_*
 
-**To reproduce the non-reasoning "gold" historical numbers** (useful for component-level debugging but NOT submittable): continue with commands below.
+exec python3 -m atom.entrypoints.openai_server \
+  --model amd/DeepSeek-R1-0528-MXFP4 --server-port 8890 -tp 4 \
+  --kv_cache_dtype fp8 --max-model-len 10240 --method mtp --num-speculative-tokens 3 \
+  --enable-tbo prefill --max-num-batched-tokens 65536 \
+  --cudagraph-capture-sizes "[1,2,4,8,16,32]"
+```
+
+**3. Bench via competition wrapper** (the ONLY submittable measurement):
+```bash
+export MODEL=amd/DeepSeek-R1-0528-MXFP4 PORT=8890 TP=4 CONC=4 ISL=8192 OSL=1024 NUM_PROMPTS=40
+/projects/teamA/danish/repos/amdgpu_bounty_optimization/dsr1-fp4-atom-mtp-mi355x/dsr1_benchmark perf
+# Only permitted modification: /8.0 → /4.0 for TP=4 in the wrapper's post-process
+```
+
+### Session-14 honest rollup (all experiments tried)
+
+| Lever | Env/files changed | Wrapper bench | Verdict |
+|---|---|---:|---|
+| **RE.1 INT4 AR** | `VLLM_ROCM_/AITER_QUICK_REDUCE_QUANTIZATION=INT4` | **1360 avg** | ✅ **KEEP** (+7.4%, GSM8K held) |
+| RE.2 BF16 naive tuner | custom `hipb_findallsols` tuner, 47 shapes | n/a | ❌ crashes GPU (persistent), 0 effect (/tmp) |
+| RE.3 MoE tune prefill | aiter `gemm_moe_tune.py` at token=32768 | 1361 avg | ❌ neutral (prefill-only, 0.2% bench impact) |
+| RE.4a HK qh32 sq=4 | `AITER_ENABLE_HK_QH32=1 AITER_ENABLE_EXPERIMENTAL=1` | 879 avg | ❌ correct but -35% (ASM faster) |
+| RE.4b HK qh32 sq=8 | metadata crash before kernel even runs | n/a | ⏳ blocked → RE.4c (multi-day) |
+
+**Only RE.1 sticks.** All other work is documented in `RE4_hk_qh32/`, `phase_re_artifacts/`, and git commits 8483c0b, b064caf, 178237a.
+
+### Path to 4/4 gates (next session)
+
+**RE.4c — HK qh32 at qseqlen=8 for MTP=7 unlock** (multi-day, 3-5 days):
+1. Fix `get_mla_metadata_v1` to produce valid work_info at `nhead=32 + qseqlen=8`
+2. Verify HK v7 kernel handles sq=8 (may have qseqlen=4 bakes-in)
+3. Expected: +15-20% TPOT (MTP=7 = 3.5 tokens/step vs MTP=3 = 2.1 tokens/step)
+4. Stacked with RE.1 INT4 AR: **1570-1700 thr/GPU → clears 1500 gate with margin**
+
+ASM persistent kernel CRASHES at sq=8 (fold invariant break). HK is the ONLY path. v7 already compiles + passes correctness at sq=4. Metadata unblock is the critical work.
+
+---
+
+## 🚨 HISTORICAL NOTE: direct-bench "gold 3/4 gates" was non-submittable
+
+Yesterday's "3/4 gates at 1500+ thr/GPU" numbers used `python -m atom.benchmarks.benchmark_serving` WITHOUT `--use-chat-template`. The competition leaderboard's `dsr1_benchmark` uses kimbochen's bench WITH chat template, which activates DSR1 reasoning mode (`<think>...</think>`) — ~14% slower per token.
+
+Side-by-side proof (same warm server, 40 prompts, --ignore-eos):
+- ATOM bench, no chat template: 1514 thr/GPU, 5.42 ms
+- Kimbochen bench + chat-template (wrapper): **1308 thr/GPU, 6.32 ms**
+- Kimbochen bench, no chat template: 1477 thr/GPU, 5.47 ms
+
+The gap = ~11% reasoning-mode + ~2.4% tool difference.
+
+**Only wrapper numbers are submittable.** Direct-bench is for component-level debugging only.
 
 ---
 

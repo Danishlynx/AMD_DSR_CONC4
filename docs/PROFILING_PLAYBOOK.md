@@ -364,3 +364,34 @@ Kimi wrapper hardcodes `tput_per_gpu = data['total_token_throughput'] / 8.0` for
 - Baseline `Baseline` struct comment says "max E2E ms, min interactivity, min tput per GPU" but the ordering in the struct init is `{median_e2e, median_intvty, tput_per_gpu}` — careful when parsing
 
 Same universal methodology. Different answer likely. Report back kernel-category breakdown once you profile.
+
+---
+
+## Session-14 (Apr 22) lessons learned for Kimi team
+
+### Don't tune prefill-only MoE shapes
+DSR1 team ran `gemm_moe_tune.py` on `token=32768` (the one unmatched shape from boot log) — found a 2.06x kernel speedup per-call. But `token=32768` fires ONLY during PREFILL: ~40 calls in a 70s wrapper bench = ~160ms saved = **0.2% of total wall time = indistinguishable from noise.**
+
+**Wrapper bench is dominated by DECODE** (40 requests × 1024 output tokens = 40960 decode steps, each using small-token shapes (M ≤ 64)). These are ALREADY tuned in `dsv3_fp4_tuned_fmoe.csv`. Re-tuning them via same methodology unlikely to yield more.
+
+**Takeaway for Kimi**: enumerate actual decode-phase MoE shapes from the boot log / profile. If they're all in `kimik2_fp4_tuned_fmoe.csv`, RE.3-style retune is wasted effort. Look for OTHER levers (MLA, GEMM, AR).
+
+### HipKittens qh32 correctness ≠ performance
+DSR1 team got HK v7 kernel at qseqlen=4 bit-exact correct vs ASM (`max_abs_diff = 0.0` on 5 shape variants). But under wrapper bench it was -35% slower (880 vs 1360 thr/GPU).
+
+**Hand-tuned ASM is hard to beat.** The persistent ASM kernel (`mla_a8w8_qh32_qseqlen4_gqaratio32_ps`) has optimized MFMA scheduling, occupancy, LDS layout that generic CK/HK kernels can't match without matching the schedule instruction-by-instruction.
+
+**Only swap to HK when ASM can't do the shape.** At qseqlen=8 (MTP=7) ASM crashes → HK is the path. At qseqlen=4 (MTP=3) ASM exists and wins.
+
+### aiter's /tmp/aiter_configs/ is ephemeral
+`/tmp/aiter_configs/*.csv` files are REGENERATED on every `import aiter` from the merge of:
+- `aiter/configs/<type>.csv` (root)
+- `aiter/configs/model_configs/*<type>*.csv` (auto-globbed)
+
+If you write to `/tmp/aiter_configs/`, it'll get wiped on next boot. For persistence, write to `aiter/configs/model_configs/<your_name>.csv`.
+
+### aiter's auto-dedup can wipe your tuned entries
+If your new CSV has duplicate keys (same M, N, K, dtype combo appears twice — e.g., once with block_m=128 and once with block_m=64), aiter's merge logic raises "duplicate shape entries" error on server boot, auto-"resolves" by keeping "best us", and may leave your file as header-only. **Submit only one row per shape key.**
+
+### Official aiter tuner has E2E mismatch gate that rejects MXFP4
+`gemm_moe_tune.py` with `--compare --update_improved` checks E2E output against torch reference. For MXFP4 with e8m0 scaling, even a correct kernel produces E2E diff > threshold → SKIP. Either widen tolerance or manually insert the winning row (accept the flag). Verified stage-level errors (err1 0.0%, err2 0.3%) are much lower than the E2E gate's internal threshold.

@@ -1,6 +1,36 @@
 # DSR1 CONC=4 — SERVER COMMANDS & INFRASTRUCTURE (merged: INFRA + SERVER_MAP)
 
-**Last updated**: 2026-04-22 session-14
+**Last updated**: 2026-04-22 session-14 end-of-day
+
+## 🏆 Current production config: RE.1 INT4 AR (1360 thr/GPU)
+
+Launch script `/tmp/p0_launch_profiled.sh` on `reproducer_best` has:
+- `VLLM_ROCM_QUICK_REDUCE_QUANTIZATION=INT4` (vLLM side)
+- `AITER_QUICK_REDUCE_QUANTIZATION=INT4` (aiter side — REQUIRED, aiter doesn't read VLLM_ROCM_* alone)
+- All other P0 envs unchanged from gold P0 3/4 image
+- CLI adds `--torch-profiler-dir /tmp/torch_traces_contaminated` (for future profile runs)
+- CLI keeps `--cudagraph-capture-sizes "[1,2,4,8,16,32]"` (P0 unlock)
+
+## Session-14 launch-script variants table
+
+| Launch script | Envs added | Bench result | Status |
+|---|---|---:|---|
+| `p0_launch.sh` (gold P0, pre-RE.1) | FP AR (baseline) | 1266 thr/GPU | deprecated |
+| `p0_launch_profiled.sh` (RE.1 current) | INT4 AR + profiler dir | **1360 thr/GPU** | ✅ PRODUCTION |
+| `p0_launch_hk_qh32.sh` (RE.4a tried) | RE.1 + `AITER_ENABLE_HK_QH32=1` + `AITER_ENABLE_EXPERIMENTAL=1` | 879 thr/GPU | ❌ -35% (REVERTED) |
+| RE.2 CSV mods (BF16 tuner output) | Wrote to `/tmp/aiter_configs/` | 0 effect (regenerated) | ❌ REMOVED |
+| RE.3 CSV mods (MoE tuner output) | Wrote to `model_configs/dsr1_fp4_tuned_fmoe.csv` | Neutral (auto-wiped) | ❌ REMOVED |
+
+## Docker snapshots (container: reproducer_best, base image: rocm/atom-dev)
+
+| Tag | ID | Notes |
+|---|---|---|
+| `dsr1_P0_3of4_gates_apr20` | `02e27b1ebcac` | Original gold (FP AR, pre-wrapper discovery) |
+| `dsr1_session13_safety_apr21` | `5609a374e6cf` | Safety snapshot after session-13 |
+| `dsr1_RE1_int4_ar_apr22` | `332d04c6f527` | RE.1 INT4 AR first commit |
+| `dsr1_RE1_int4_ar_validated_apr22` | `e7259e3c94c1` | RE.1 post-sanity, CURRENT GOOD STATE |
+
+To restore production: `docker run --rm -it rocm/atom-dev:dsr1_RE1_int4_ar_validated_apr22` → run `/tmp/p0_launch_profiled.sh`.
 
 ---
 
