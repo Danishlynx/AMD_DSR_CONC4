@@ -64,12 +64,165 @@
   - (c) v9 kernel redesign once 16x16x128 MFMA landed
 
 ## Next priority: v9 = 16x16x128 MFMA rewrite (spec-in-hand, ready to code)
-- HipKittens has `mfma1616128` binding at `HipKittens/include/ops/warp/register/tile/mma.cuh:119` + `rt_16x128_s` type — feasible
-- Traits: `kBlockK=128` (from 32), kv_0/kv_1 tile → `rt_16x128_s`, num_nope_iter 8→2
-- VGPR budget: ~180/lane (fits 256 at kOccupancy=1)
-- LDS: new `load_k_to_gpr_wide<kColOffset=128>` reading 4× ds_read_b64 chained
-- **Estimated**: 1.5-2 days; expected -15-20% on MLA time (~18% of wall) = -3 to -5% TPOT overall
-- Then extend v9 to sq=8 natively → MTP=7 unlock path → clears 1500 gate
+
+**Full plan below.** Session-16 starts here.
+
+### The core upgrade
+
+v7/v8 use `mfma_f32_16x16x32_fp8_fp8` (32 K-cols/call, 16 cyc). ASM uses `mfma_scale_f32_16x16x128_f8f6f4` (128 K-cols/call, 32 cyc = **4× K-depth density**). v9 swaps HK to the wider MFMA — this IS the missing 35%.
+
+### Hardware primitive (verified in ROCm 7.2.2)
+
+| Intrinsic | Cycles | Path |
+|---|---:|---|
+| `__builtin_amdgcn_mfma_scale_f32_16x16x128_f8f6f4(A, B, C, 0, 0, 0, 0, 0x3F800000, 0x3F800000)` | 32 | Pure FP8 mode via scale=1.0 |
+
+HipKittens has the binding at `3rdparty/HipKittens/include/ops/warp/register/tile/mma.cuh:119` (`mfma1616128`). `mma_ABt_base` dispatches it when `A_cols==128 && B_cols==128 && D_shape==rt_16x16`. Register-tile types `rt_16x128_s` at `types/types.cuh:69`. **No new intrinsic work.**
+
+### Traits changes
+
+| Trait | v7/v8 | v9 | Why |
+|---|---:|---:|---|
+| kBlockK (NoPE) | 32 | **128** | MFMA native K-width |
+| kBlockK_RoPE | 32 | 32 | RoPE K-dim = 64 only, no payoff |
+| kv_0 / kv_1 tile | `rt_16x32_s` | **`rt_16x128_s`** | Match MFMA |
+| num_nope_iter | 8 | **2** | 4× fewer iterations at 4× wider |
+| num_pv_iter | 8 | **2** | Same |
+| kNumWarps | 2 | 2 | nhead=32 fixed constraint (kBlockM==kQoNumHead==32) |
+| kv_0+kv_1 VGPR/lane | 8 | **16** | wider tile state |
+
+### Kernel diffs — 3 hot sites
+
+#### Site A — NoPE QK^T (v7 line 331-372)
+- 8 iterations → 2 iterations
+- Each iter: 4× `load_k_to_gpr` (16×32) → 4× `load_k_wide_to_gpr` (16×128)
+- Each iter: 2× `mma_ABt` at 16×32 → 2× `mma_ABt` at 16×128 (dispatches to mfma1616128)
+- Add `s_setprio(14)` before + `s_setprio(0)` after for MFMA dual-issue
+
+#### Site B — RoPE QK^T
+Unchanged. kBlockK_RoPE=32, still uses mfma1616x32.
+
+#### Site C — PV GEMM (v7 line 537-609)
+Analogous to Site A. num_pv_iter 8→2, wider `oaccu_0`/`oaccu_1` tiles, same `mma_ABt` emitting mfma1616128.
+
+### NEW function — `load_k_wide_to_gpr` in `buffer_managers.cuh`
+
+```cpp
+template <uint32_t kRowOffset, uint32_t kColOffset, hkdart::all RT>
+__device__ __forceinline__ static void load_k_wide_to_gpr(RT& dst, uintptr_t p_lds_kv) {
+    static_assert(kColOffset % 64 == 0);
+    static_assert(kColOffset + 128 <= 576);
+    const uint32_t lane_idx = ckt::get_lane_id();
+    const uint32_t row      = lane_idx % 16;
+    const uint32_t row_phy  = (row / 2) * 4 + (row % 2);
+    const uint32_t col_lane = (lane_idx / 16) * 8;
+    constexpr uint32_t kBlock0 = kColOffset / 64;
+    constexpr uint32_t kBlock1 = kBlock0 + 1;   // CROSS-BLOCK!
+    const uintptr_t p_row = p_lds_kv
+                          + (row_phy / 4) * kNumBytesPerSubBlock
+                          + (row_phy % 4) * kNumBytesPerRow
+                          + (col_lane % kNumCols) * sizeof(kv_t);
+    constexpr uint32_t kBlk0Offset = (kRowOffset / 16) * 2 * kNumBytesPerRow + kBlock0 * kNumBytesPerBlock;
+    constexpr uint32_t kBlk1Offset = (kRowOffset / 16) * 2 * kNumBytesPerRow + kBlock1 * kNumBytesPerBlock;
+    using range_type = hkdart::get_nth_range_t<typename RT::register_ranges, kRowOffset / 16>;  // 8 VGPRs
+    hkm::ds_read_b64<range_type::lo + 0>(p_row, kBlk0Offset + 0);   // cols 0-31 in block N
+    hkm::ds_read_b64<range_type::lo + 2>(p_row, kBlk0Offset + 32);  // cols 32-63 in block N
+    hkm::ds_read_b64<range_type::lo + 4>(p_row, kBlk1Offset + 0);   // cols 64-95 in block N+1
+    hkm::ds_read_b64<range_type::lo + 6>(p_row, kBlk1Offset + 32);  // cols 96-127 in block N+1
+}
+```
+
+**Key invariants**:
+1. 4× `ds_read_b64` → 4 consecutive VGPR pairs (8 VGPRs total) = `rt_16x128_s` lane storage
+2. Block-boundary crossing at col 63→64: must use `kBlock1 = kBlock0 + 1`, NOT simple stride
+3. Row mapping unchanged from v7 (`(row/2)*4+(row%2)` LDS sub-block layout)
+4. MFMA expects specific byte order — HK handles, but verify at sq=1 first
+
+### VGPR budget (per-lane at kOccupancy=1)
+
+| Storage | VGPRs |
+|---|---:|
+| k_q_nope | 32 |
+| k_q_rope | 4 |
+| **kv_0 (16×128)** | **8** (was 4) |
+| **kv_1 (16×128)** | **8** (was 4) |
+| p_comp | 8 |
+| p_mfma | 2 |
+| oaccu | 128 |
+| Scratch | ~30 |
+| **Total** | **~220** (fits 256, tight) |
+
+Mitigation if compiler spills: `-mllvm --amdgpu-num-vgpr=256` hint or split oaccu across passes.
+
+### Correctness protocol
+
+**V9-P4 smoke test (sq=1 bs=1 kv=16)**: v9 output vs v7 reference, max_abs_diff < 1e-2. If FAIL → per-iter `oaccu_0.get(0)` probe, binary-search the buggy iter. Most likely failure modes:
+- LDS cross-block off-by-one (cols 64-127 read from wrong block)
+- MFMA scale bits not zero (confuses to MXFP4 mode)
+- range_type VGPR span mismatch (2 vs 8 VGPR)
+
+**V9-P5 full sweep**: bs∈{1,2,4}, sq∈{1,2,4}, kv_seqlens∈{16,64,1024,8192}. All pass tol <1e-2 + rel_L2 <0.05. Skip sq=8 for now.
+
+**V9-P6 bench**: 3× kimbochen+chat-template @ CONC=4. Decision:
+- ≥1360 thr/GPU → SUCCESS, proceed to sq=8
+- 1100-1300 → partial, add XOR swizzle (v9.2) + tight s_waitcnt (v9.3)
+- <1100 → 128-wide load has bug, debug before proceeding
+
+### sq=8 follow-up (Option A — python split)
+
+After v9 sq=4 validates, unlock MTP=7 in `aiter/mla.py`:
+```python
+if nhead==32 and max_seqlen_q==8 and AITER_ENABLE_HK_QH32_V9=1:
+    for q_pos in range(8):
+        q_slice = q[q_pos::8]
+        meta_sq1 = cached_sq1_metadata  # amortize
+        o_slice = hk_mla_decode_fwd(q_slice, ..., meta_sq1)
+        outputs.append(o_slice)
+    o.copy_(stack(outputs, dim=1).reshape(orig))
+```
+Overhead: 8× launches × ~5µs = 40µs/step = +0.7% TPOT. Gain from MTP=7: +15-20% TPOT → **~1570-1700 thr/GPU = clears 1500 + likely closes E2E gate**.
+
+### sq=8 follow-up (Option B — native, HARDER)
+
+Only after Option A validates economics. Patch `natively_supported` in v1_2_device.cuh + extend v9 to handle qo_end-qo_start=8 via head-chunked oaccu streaming through LDS. 2-3 days extra. Cleaner and slightly faster but higher risk.
+
+### Phase ladder + wall-time
+
+| Phase | Deliverable | Wall | Gate |
+|---|---|---:|---|
+| V9-P1 | v9 source + traits + MFMA call sites | 4h | Compile-clean .cuh |
+| V9-P2 | `load_k_wide_to_gpr` in buffer_managers | 6h | Unit test 16×128 = 4× narrow-read |
+| V9-P3 | hk_decode_fwd.cu v9 dispatch | 1h | v9 symbol in .so |
+| V9-P4 | Smoke sq=1 bs=1 kv=16 | 2h | max_abs_diff < 1e-2 |
+| V9-P5 | Full sweep sq∈{1,2,4} | 4-12h | All PASS |
+| V9-P6 | Wrapper bench | 1h | ≥1100 thr/GPU |
+| V9-P7 | Snapshot + commit | 30min | Backups |
+| V9-P8 (Option A) | Python-split sq=8 | 4-8h | MTP=7 boots + 3/4 or 4/4 |
+| V9-P9 (Option B) | Native sq=8 | 2-3d | 4/4 with margin |
+
+**V9-P1..P7 = 1.5-2 days. Total including Option A = 2-2.5 days.**
+
+### Risks
+
+| Risk | Prob | Impact | Mitigation |
+|---|---|---|---|
+| MFMA lane-map wrong at 128-wide | medium | high | Per-iter probe + sq=1 first |
+| VGPR spill | medium | high | `--amdgpu-num-vgpr=256` + split oaccu if needed |
+| LDS cross-block off-by-one | medium | high | Unit-test before kernel integration |
+| v9 matches v7 not ASM | low-med | medium | v9.2 swizzle + v9.3 s_waitcnt stack |
+| sq=8 python overhead > MTP=7 gain | low | medium | Cache metadata; amortize |
+
+### Rollback
+
+v9 gated via `AITER_ENABLE_HK_QH32_V9=1`. Default off → v7 production. RE.1 ASM path (1368 thr/GPU) unaffected when `AITER_ENABLE_HK_QH32=0`.
+
+### Session-16 kickoff
+
+1. Read this section + [project_dsr1_v9_plan_full_apr22.md](../../memory/project_dsr1_v9_plan_full_apr22.md)
+2. Verify re4c_v8 container running + 4 GPUs allocated
+3. V9-P1 first: copy v7 as v9 template, apply traits changes
+4. V9-P4 smoke test BEFORE any bench (correctness-first)
+5. Do NOT skip VGPR budget check at compile — if >256 spills, stop and investigate
 
 ## Production config (unchanged, stable at 3/4)
 **RE.1 ASM** remains best: 1360 thr/GPU, TPOT 6.15 ms, GSM8K 0.9424, 3/4 gates (E2E 7200ms is binding).
