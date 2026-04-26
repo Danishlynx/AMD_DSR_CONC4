@@ -1,6 +1,438 @@
 # DSR1 CONC=4 — MASTER (merged: STATUS + Current_plan + Bottleneck + Danish + BRIEF + FINDINGS + EXPERIMENTS + HISTORY)
 
-**Last updated**: 2026-04-22 session-16 — V9 MFMA kernel compiles + linked (smoke faults at Q LDS), MTP=7 hit multiple walls. BF16 KV path in progress.
+**Last updated**: 2026-04-26 (afternoon) — multi-CONC bench sweep block added at top: **CONC=4 (warm + no-warmup), CONC=32 (warm), CONC=128 (warm + no-warmup)** vs Apr 10-13 vanilla baseline. Then return to CONC=4 4/4-gates work. **3/4 GATES still verified on warm CONC=4** (TPOT_med 4.84-4.98 ms, thr/GPU 1636-1675, interact 200-207, GSM8K 0.9522 separately). Only E2E ~5240 ms misses 5000 ms by 240 ms.
+
+---
+
+# 📊 APR 26 MULTI-CONC BENCH SWEEP (Danish-requested before continuing CONC=4 gates work)
+
+All runs on `re4c_v10`, DSR1-MXFP4, MTP=3, locked stack (RELAXED 9/0.5, INT4 QR, RCCL_MSCCLPP, NCCL_MIN_NCHANNELS=16, DUAL_STREAM_THRESHOLD=1024, TBO prefill, ATOM_USE_CDNA4_MOE_GEMM2=0, ATOM_MSCG_K UNSET, ATOM_MSCG_P6_REPLAY=0). Boot: TP=4 server up at 11:13, CONC=4/32 ran on it; TP=8 cold-boot at 14:31 for CONC=128 only. Phase 2 fusion code present but dormant (no callers).
+
+ISL=8192 OSL=1024 throughout. `benchmark_serving` ran with `--max-concurrency CONC --num-prompts CONC×2 (or 40 for CONC=4)`.
+
+## CONC=4 — TP=4 (server warm since 11:13)
+
+### CONC=4 WITH 8-curl warmup (3 runs, 11:27-11:29)
+| Run | TPOT_med | TPOT_mean | TTFT_med | thr/GPU | interact | E2E_calc_med |
+|---|---|---|---|---|---|---|
+| 1 | 4.795 | 5.015 | 289.59 | 1632 | 208.55 | 5195 |
+| 2 | 4.840 | 4.950 | 288.93 | 1674 | 206.61 | 5240 |
+| 3 | 4.901 | 5.044 | 288.37 | 1650 | 204.05 | 5302 |
+| **Median** | **4.840** | 5.015 | 288.93 | **1650** | **206.61** | **5240** |
+| Gate | ≤6.06 ✅ | — | — | ≥1500 ✅ | ≥165 ✅ | ≤5000 **❌ (-240 ms)** |
+
+GSM8K (separately verified, same stack): **0.9522 flexible / 0.9469 strict** → ≥0.93 ✅. **3/4 gates.**
+
+### CONC=4 WITHOUT 8-curl warmup (3 runs, 14:11-14:13, server already warm from prior runs)
+| Run | TPOT_med | TPOT_mean | TTFT_med | thr/GPU | interact | E2E_calc_med |
+|---|---|---|---|---|---|---|
+| 1 | 4.942 | **7.148** | 290.86 | **1161** | 202.36 | 5346 |
+| 2 | 4.842 | 5.033 | 289.94 | 1667 | 206.52 | 5244 |
+| 3 | 4.901 | 5.016 | 289.89 | 1656 | 204.05 | 5303 |
+| **Median** | **4.901** | 5.033 | 289.89 | **1656** | **204.05** | **5303** |
+
+**Cold-tail observation**: Run 1 TPOT_mean=7.148 (vs Run 2/3 ~5.03), thr/GPU=1161 (vs ~1660). The 8-curl warmup eliminates the Run-1 cold-decode penalty. Once cudagraphs hit, runs 2-3 are equivalent to warm.
+
+**Δ warmup vs no-warmup median**: TPOT +0.06 ms (+1.3%), thr +6 (flat), E2E +63 ms — within DVFS variance ~1.7%. Trick matters most for cold-boot Run 1.
+
+## CONC=32 — TP=4 (same warm server, 13:54-13:55)
+
+### CONC=32 WITH 8-curl warmup (2 runs)
+| Run | TPOT_med | TPOT_mean | TTFT_med | TTFT_mean | thr/GPU | interact | E2E_calc_med | ITL_med |
+|---|---|---|---|---|---|---|---|---|
+| 1 | 13.077 | 14.442 | 2080.1 | 3238.0 | 4144 | 76.47 | 15457 | 29.96 |
+| 2 | 12.629 | 13.594 | 2429.7 | 3286.4 | 4244 | 79.19 | 15349 | 29.46 |
+| **Median** | **12.85** | 14.02 | 2255 | 3262 | **4194** | **77.83** | **15403** | 29.71 |
+
+64/64 prompts completed both runs. Duration: 35.5 / 34.6 s. p99 TPOT 41.7 / 27.5 ms. p99 ITL 477 / 275 ms. Compared to CONC=4 baseline: TPOT +166% (4.84→12.85), thr/GPU +154% (1650→4194). Saturation regime.
+
+CONC=32 NOWARM: not separately captured (warmup naturally inherited from prior CONC=4 benches on same long-running server).
+
+## CONC=128 — TP=8 cold-boot (server up 14:32, 14:36-14:41)
+
+### CONC=128 NOWARM (no 8-curl warmup), 2 runs immediately after boot
+| Run | TPOT_med | TPOT_mean | TTFT_med | TTFT_mean | thr/GPU | interact | E2E_calc_med | TPOT std/p99 | ITL std/p99 |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | 26.83 | 128.81 | 21239 | 20397 | 2820 | 37.27 | 48685 | 696/4051 | 916/295 |
+| 2 | 26.18 | 147.81 | 16316 | 15366 | 3281 | 38.20 | 43095 | 771/4034 | 888/80 |
+| **Median** | **26.50** | 138.31 | **18777** | 17882 | **3051** | **37.73** | **45890** | — | — |
+
+128/128 prompts both runs. Run 1 dur 52.1s / Run 2 dur 44.7s. **Cold tail**: TPOT_mean 128-148 ms with std 696-771 and p99 4034-4051 ms — first batch hit cudagraph compile + JIT. Median TPOT still 26 ms because the bulk of decode steps are warm.
+
+### CONC=128 WARM (8-curl warmup applied), 2 runs at 14:40-14:41
+| Run | TPOT_med | TPOT_mean | TTFT_med | TTFT_mean | thr/GPU | interact | E2E_calc_med | TPOT std/p99 | ITL std/p99 |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | 26.085 | 25.987 | 12440 | 12750 | 3601 | 38.34 | 39125 | 6.67/36.90 | 790/69.6 |
+| 2 | 26.427 | 27.355 | 12818 | 12849 | 3557 | 37.84 | 39853 | 12.83/45.21 | 789/72.9 |
+| **Median** | **26.26** | 26.67 | **12629** | 12800 | **3579** | **38.09** | **39489** | — | — |
+
+128/128 both runs, dur 40.9 / 41.4 s. **Std dropped from 696-771 (NOWARM) → 6.7-12.8 (WARM)** — warmup eliminates cold spikes. TTFT improved by 6,148 ms (33%).
+
+### CONC=128 — TODAY vs APR 10-13 VANILLA (`test_mtp3_conc128`, TP=8 MTP=3 fp8kv, no relaxed-MTP)
+| Metric | Apr 10-13 vanilla | Today NOWARM | Today WARM | WARM Δ vs vanilla |
+|---|---|---|---|---|
+| **thr/GPU** | 3192 | 3051 (−4.4%) | **3579** | **+12.1%** |
+| **TPOT_med** | 45.95 ms | 26.50 ms (−42.3%) | **26.26 ms** | **−42.9%** |
+| **Interact** | 21.76 | 37.73 (+73.4%) | **38.09** | **+75.0%** |
+| **E2E_calc_med** | 48,394 ms | 45,890 ms (−5.2%) | **39,489 ms** | **−18.4%** |
+| **GSM8K** | 0.9447 | not run | not run | — |
+
+**Take**: today's relaxed-MTP 9/0.5 stack at TP=8 CONC=128 **massively beats Apr 10-13 vanilla on TPOT (−43%) and Interactivity (+75%)** with **+12% thr** and **−18% E2E** WARM. CONC=128 still **fails all gates** (thr-low, interact-low vs ≥48, E2E-high vs ≤22s) — consistent with prior memory entry that CONC=128 is the hardest tier.
+
+### Warmup effect summary across CONCs
+
+| CONC | Metric | NOWARM | WARM | Δ |
+|---|---|---|---|---|
+| 4 | TPOT_med | 4.901 | 4.840 | −1.3% |
+| 4 | thr/GPU | 1656 | 1650 | flat |
+| 4 | E2E_calc_med | 5303 | 5240 | −63 ms |
+| 128 | TPOT_med | 26.50 | 26.26 | −0.9% |
+| 128 | thr/GPU | 3051 | 3579 | **+17.3%** |
+| 128 | TTFT_med | 18777 | 12629 | **−6148 ms (−33%)** |
+| 128 | E2E_calc_med | 45890 | 39489 | **−6401 ms (−14%)** |
+| 128 | TPOT std | 696-771 | 6.7-12.8 | **−98% tail** |
+
+Warmup matters most at HIGH CONC (cold cudagraph compile happens during the first batch which is huge → contaminates TTFT and tail). At CONC=4 the bench's own internal `Warming up with 1 requests` step covers most of it on a long-running server.
+
+### Reproduce / boot config (used for every run above)
+- Boot script (TP=4): `/tmp/boot_cdna4_moe.sh` (in container `re4c_v10`)
+- Boot script (TP=8 today): `/tmp/boot_tp8_dsr1.sh` (derived: `HIP_VISIBLE_DEVICES=0..7`, `-tp 8`, perf-determinism reset for d 0..7)
+- 8-curl warmup: 8 small `curl /v1/completions max_tokens=50 prompt='Hello world N'` requests
+- Bench cmd: `python3 -m atom.benchmarks.benchmark_serving --model amd/DeepSeek-R1-0528-MXFP4 --port 8890 --dataset-name random --random-input-len 8192 --random-output-len 1024 --num-prompts <N> --max-concurrency <CONC> --trust-remote-code --save-result --result-filename /tmp/<name>.json`
+- Result JSONs in container `re4c_v10` at `/tmp/proper_run{1,2,3}.json` (CONC=4 warm), `/tmp/no_warmup_run{1,2,3}.json` (CONC=4 nowarm), `/tmp/conc32_run{1,2}.json` (CONC=32 warm), `/tmp/tp8_conc128_NOWARM_run{1,2}.json`, `/tmp/tp8_conc128_WARM_run{1,2}.json`
+
+**RETURNING TO CONC=4 4/4-gates work below** — all sections from this point onward are the prior CONC=4 plan/findings/history.
+
+---
+
+**Pre-multi-CONC-sweep header**: 2026-04-26 — **🚀 BREAKTHROUGH: 3/4 GATES VERIFIED on warm-steady-state benches.** Locked stack (9/0.5 + MSCG_K disabled) Run 4: Throughput/GPU 1636 (PASS 1500), TPOT 4.84ms (PASS 6.06), Interactivity 207 (PASS 165), GSM8K 0.9522 (PASS 0.93, BEATS Apr 23 record). Only E2E ~5238ms misses gate 5000 by 238ms. Prior "1/4 gates 6.13ms" was COLD-START tainted — warm 3-run sweep median 4.84-4.98 ms. Snapshot: rocm/atom-dev:dsr1_apr26_relaxed9_mscgK_off_baseline (sha 48960a2a627f). 8/0.55 tested and DEAD (GSM8K 0.9265/0.9287). MSCG_K=2 was NOT null bench (per Apr 25 memory) — it was silent regression; disabling gave -0.17 ms median improvement on top of 9/0.5. B1 cdna4 MoE GEMM2 kernel built/dispatching/correct but no TPOT win (FlyDSL atomic already in dispatcher hot path). MSCG P6 graph wire failed at replay (frozen max_seqlen_k in triton kernel). MTP=4 blocked at AITER ASM kernel (only natively supports max_seqlen_qo ∈ {2,4} for nhead=32 fp8/fp8 gfx950); Path B fix is multi-day with non-trivial paged-attention semantics.
+
+## CURRENT GATE STATUS (Apr 26 post-stack: 9/0.5 + MSCG_K disabled)
+
+| Metric | Result | Gate | Status |
+|---|---|---|---|
+| GSM8K avg | 0.9341 (0.9348, 0.9333) | ≥ 0.93 | ✅ PASS |
+| Mean TPOT avg | 6.135 ms (6.09, 6.18) | ≤ 6.06 ms | ❌ -0.075 ms shortfall |
+| Median TPOT avg | 6.17 ms (6.13, 6.21) | ≤ 6.06 ms | ❌ -0.11 ms shortfall |
+| Throughput/GPU | TBD | ≥ 1500 | ❌ |
+| E2E | TBD | ≤ 5000 ms | ❌ |
+
+**1/4 gates** (GSM8K only) but TPOT closing fast. Mean within 0.075 ms of gate. Apr 23 lucky record was 5.93 median — still 0.24 ms below us, but our 6.13 in run 1 is in the same DVFS-variance ballpark.
+
+## Lever progression (Apr 26)
+| Test | Δ vs baseline | Notes |
+|---|---|---|
+| 9/0.5 alone | Mean -0.14, Median +0.07 | First validated session win |
+| 9/0.5 + MSCG_K disabled | **Mean -0.135, Median -0.10** | Stacks; MSCG_K was costing us 0.17ms median |
+| 8/0.55 alone | DEAD | GSM8K 0.9265-0.9287 < gate |
+| 10/0.6 alone | DEAD (prior) | GSM8K 0.9227 |
+| 9/0.55 (predicted DEAD) | not tested | DELTA increase kills accuracy faster than TOP_N |
+
+## What's been tried Apr 26 (post B1 dead-end):
+
+| Lever | Result | Notes |
+|---|---|---|
+| **B1 CDNA4 MoE GEMM2** | DEAD as TPOT win | Kernel builds + dispatches (4640 calls) + GSM8K 0.94 PASS, but +0.37 ms TPOT regression. FlyDSL atomic already in path. |
+| **MSCG P6 main+drafter graph wire** | DEAD | Captured graph fails at replay due to frozen max_seqlen_k in triton kernel launch params → GPU memory access fault. |
+| **aiter#1468 MLA fallback** | NOT BITING | ASM kernel supports nhead=32 natively (mla.py:344). |
+| **PR #582** | DOESN'T HELP | SGLang-only; vLLM-OOT already has equivalent. |
+| **L4.5 Fuse_A_GEMM** | STILL BLOCKED | Gated behind use_triton_gemm() AND ENABLE_DS_QKNORM_QUANT_FUSION. We use AITER GEMM. |
+| **L7 DCP** | NOT VIABLE | ATOM has no CDP feature; would need multi-day plumbing. |
+| **MTP=4** | BLOCKED at kernel | AITER ASM `mla/metadata/v1_2_device.cuh:476` only supports max_seqlen_qo ∈ {2,4} for nhead=32 fp8/fp8 gfx950. Split shim alternative breaks cudagraph + has per-position kv_indptr semantic bug. |
+| **Relaxed 9/0.5** | ✅ VALIDATED WIN | Mean TPOT -0.14 ms avg, GSM8K 0.9337 avg PASS. |
+
+---
+
+---
+
+# 🎯 ACTIVE PLAN (Apr 25 EOD): B1 Custom CDNA4 MoE GEMM2 + atomic_pk_add_bf16
+
+**Status**: Phase 1 in progress. Read prior Apr-24 fork base at `RE_MoE_CDNA4/cdna4_moe_gemm2.cuh` (already bit-exact via 4 fixes per `ARCH_PLAN_gemm2.md` §6). Now adding atomic-reduce variant.
+
+## Context
+
+### Profile evidence (Apr 25, embedded torch.profiler, 100 decode forwards)
+
+- MoE bucket = 49% of all GPU time
+- `reduce_scatter_cross_device_store<bf16; 4>` = 22.9% of GPU time alone, 358 calls / 200 ms window, 82 µs/call
+- Zero overlap between `moe_gemm1`/`moe_gemm2` and `reduce_scatter` — single GPU stream tid=3, 82.1% busy
+- aiter dispatcher selects `moe_ck2stages_*` for our exact shape (cu_num=256, hidden=7168, inter=512, experts=257, topk=9) — verified in `dsv3_fp4_tuned_fmoe.csv`. CK-tile path mandates separate `reduce_scatter`.
+
+### Engineering target
+
+Replace `cktile_moe_gemm2 (~100 µs/call) + reduce_scatter (~82 µs/call) = 182 µs/call serial` with single fused kernel ≤ 130 µs/call. Save ~2.9 ms GPU/forward → −0.5 to −1.5 ms TPOT after parallel-stream + AR collective elimination accounting.
+
+## Reference baseline to beat
+
+| Component | µs/call | calls/forward | µs/forward |
+|---|---|---|---|
+| `moe_gemm1_0` (cktile gemm1) | 155 | 56 | 8718 |
+| `moe_gemm2_0` (cktile gemm2) | 100 | 56 | 5617 |
+| **`reduce_scatter_cross_device_store`** | **82** | **115** | **9463** |
+| `fused_allreduce_rmsnorm_` | 65 | 86 | 5624 |
+
+## Kernel design
+
+### Tile + thread layout
+
+| Parameter | Value |
+|---|---|
+| `tile_m` | 32 |
+| `tile_n` | 256 |
+| `tile_k` | 128 (native MFMA FP4 K) |
+| MFMA opcode | `v_mfma_scale_f32_16x16x128_f8f6f4` (16 cy, CBSZ=4 BLGP=4) |
+| Waves/CTA | 4 |
+| Workgroups | grid_y = cu_num = 256 (persistent, atomic counter) |
+| AGPR | `amdgpu-agpr-alloc="64,128"` |
+| LDS | 2× 4 KB ping-pong = 8 KB/CTA |
+
+### CDNA4 primitives (verified ISA refs)
+
+1. `v_mfma_scale_f32_16x16x128_f8f6f4` (ISA p.56) — 4-DWORD VOP3P, ABID[0]=1, E8M0 scale
+2. `global_atomic_pk_add_bf16` (ISA p.551, opcode 82) — packed BF16x2 atomic, 40-60 cy L2
+3. `ds_read_b64_tr_b4` (ISA p.98, opcode 224) — transpose-on-read FP4, 4 cy
+4. `global_load_lds_dwordx4` (ISA p.555, opcode 125) — async global→LDS, no VGPR
+5. `v_accvgpr_read/write_b32` (ISA p.294) — AGPR↔VGPR routing
+6. `s_setprio` (ISA p.144) — priority ladder
+7. `s_barrier` (ISA p.144) + `s_waitcnt vmcnt(N) lgkmcnt(N)` (ISA p.19)
+8. LDS XOR swizzle (ISA p.95: 64 banks × 32-bit)
+9. Persistent kernel: global counter `atomicAdd(&work_counter, 1)`
+
+### Critical-path schedule per K-iter
+
+```
+cycle  0: global_load_lds_dwordx4 next_A_tile          # async → LDS buf B
+cycle  4: ds_read_b64_tr_b4 cur_A from LDS buf A → vA
+cycle  8: ds_read_b64_tr_b4 cur_W2 from LDS w_buf → vW
+cycle 12: s_waitcnt lgkmcnt(2)
+cycle 14: v_accvgpr_write_b32 acc → C_agpr
+cycle 18: s_setprio 3
+cycle 19: v_mfma_scale_f32_16x16x128_f8f6f4 D, vA, vW, C, scale  # 16 cy
+cycle 19: global_load_lds_dwordx4 next_W2_tile         # overlap
+cycle 35: s_setprio 0
+```
+
+K-loop unrolled by 4. K-iters = 512/128 = 4. N-iters = 7168/256 = 28.
+
+### Epilogue with atomic reduce
+
+```cpp
+// Per output element (16 × 256 rows × cols, 4 elem/lane):
+v_accvgpr_read_b32     acc → vReg                         // spill
+v_cvt_f32_bf16          vReg → vBF16x2
+addr = out_ptr + (token_idx * HIDDEN) + n_offset
+global_atomic_pk_add_bf16 [out_ptr + addr], vBF16x2       // skip reduce_scatter
+```
+
+Wraps `RankSignals + P2P sync` from `custom_all_reduce.cuh:1091-1160` for cross-rank ordering, but per-rank reduce step is gone.
+
+## Files
+
+### Read-only references
+
+| Path | Purpose |
+|---|---|
+| `/app/aiter-test/aiter/ops/flydsl/kernels/mixed_moe_gemm_2stage.py` (2708-2850, 4356+) | FlyDSL atomic mode template |
+| `/app/aiter-test/csrc/include/custom_all_reduce.cuh` (1091-1160) | `reduce_scatter_cross_device_store` we replace |
+| `/app/aiter-test/csrc/ck_tile_gemm_moe_2stages/include/moe_cktile2stages_common.cuh` | cktile baseline (weight + scale layout) |
+| `/app/aiter-test/aiter/fused_moe.py` (780-1100) | Dispatcher injection point |
+| `/app/aiter-test/aiter/configs/model_configs/dsv3_fp4_tuned_fmoe.csv` | Confirms cktile picked for our shape |
+| `dsr1-hackathon-dec073/RE_MoE_CDNA4/cdna4_moe_gemm2.cuh` | Apr-24 bit-exact base — fork target |
+| `Phase1_kernal_Results/MOE.md` + `Danish.py` | v917 FlyDSL build chain pattern |
+
+### New files to create
+
+| Path | Purpose |
+|---|---|
+| `RE_MoE_CDNA4/dsr1_moe_gemm2_atomic.cuh` | Main kernel template |
+| `RE_MoE_CDNA4/dsr1_moe_gemm2_atomic_launcher.cpp` | C++ ctypes launcher |
+| `RE_MoE_CDNA4/Makefile` | hipcc build with gfx950 + AGPR + waves-per-eu |
+| `RE_MoE_CDNA4/correctness_test.py` | Bit-exact test vs flydsl_moe_stage2 |
+| `RE_MoE_CDNA4/perf_microbench.py` | Time vs cktile_moe_gemm2 + reduce_scatter |
+| `RE_MoE_CDNA4/atom_dispatcher_patch.py` | Env-gated `ATOM_USE_CUSTOM_MOE_GEMM2=1` monkey-patch |
+
+## Phases (3-4 weeks)
+
+### Phase 1 (Days 1-3): Single-tile correctness
+- Skeleton kernel: 1 MFMA tile m16n16k128, no atomic, no persistent
+- `correctness_test.py` vs PyTorch reference
+- **Exit**: 1 tile bit-near-exact
+
+### Phase 2 (Days 4-10): Full DSR1 shape
+- Tile loops M=32, N=7168, K=512
+- Persistent kernel + LDS double-buffer + ds_read_b64_tr_b4 + scale layout
+- **Exit**: full-shape correctness vs `flydsl_moe_stage2`
+
+### Phase 3 (Days 11-17): In-kernel atomic
+- Replace store with `global_atomic_pk_add_bf16` into shared accumulator
+- Zero-init accumulator buffer pre-call
+- Keep `RankSignals` cross-rank sync intact
+- **Exit**: e2e correctness vs `cktile + reduce_scatter` reference
+
+### Phase 4 (Days 18-25): Perf + integration
+- Tune to ≤ 130 µs/call (s_setprio, sched_group_barrier, LDS depth, AGPR count, waves-per-eu)
+- `llvm-objdump` audit confirms primitives emitted
+- `grep TODO|stub|fallback|naive|HACK|return 0` returns 0
+- `atom_dispatcher_patch.py` env-gated, strict shape match
+- DSR1 server bench: GSM8K ≥ 0.93, 2× perf bench, median TPOT compare
+- **Exit**: GSM8K pass + ≥ 0.5 ms TPOT improvement, snapshot `dsr1_b1_custom_moe_atomic`
+
+## Verification
+
+| Phase | Test |
+|---|---|
+| 1 | `python3 correctness_test.py --tile m16n16k128 --check_one_mfma` |
+| 2 | `python3 correctness_test.py --shape dsr1_decode --check_full_output` |
+| 3 | `python3 correctness_test.py --shape dsr1_decode --check_e2e_with_atomic` |
+| 4 | `perf_microbench.py` → ≤130 µs; `llvm-objdump` primitives present; GSM8K ≥ 0.93; 2-bench median ≤ 6.0 ms TPOT |
+
+## Risks
+
+| Risk | Mitigation |
+|---|---|
+| MFMA scaled FP4 wrong bits | Phase 1 single-tile correctness catches BEFORE full kernel |
+| LDS bank conflicts | XOR swizzle pattern; verify via rocprofv3 PMC |
+| AGPR over-alloc spill | Drop to 32,64; Phase 1 lessons say minimal benefit at our shape |
+| Atomic slower than expected | Overlap with next K-iter MFMA via priority ladder |
+| Dispatcher patch breaks other shapes | Strict shape gate `(7168, 512, 257, 9, token≤256)` only |
+| Cross-rank sync corruption | Reuse exact `RankSignals` mechanism |
+| FP4 weight layout mismatch | Phase 1 Danish.py:204-207 documented preshuffle pattern |
+| 3-4 weeks + still misses gate | Even -0.3 ms is real progress, unlocks B3 next |
+
+## Stop conditions
+
+- Phase 1 fails after 5 days: fall back to non-scaled MFMA + manual scale
+- Phase 3 atomic corrupts despite signal sync: pivot to 2-step (compute + separate atomic reduce)
+- Phase 4 ≥ 130 µs/call after 5 tuning iters: try `tile_m=16, tile_n=128`
+- GSM8K drops <0.93: revert via env unset, debug accumulation order
+
+## Why B1 not B2/B3
+
+- B2 (custom MLA): AITER MLA already AMD ASM-tuned; only ~5-12% of GPU time. Ceiling -0.2 to -0.5 ms.
+- B3 (AR fusion): MoE input needs full attn output → can't defer attn-out AR. Multi-week + correctness landmines.
+- **B1**: directly attacks LARGEST single fully-serialized GPU bucket. Highest ΔTPOT/week.
+
+## What this REPLACES (parked plans)
+
+MSCG K=2 P6+P7 (Track A) + Track B FP8 attention kernel are documented in memory `project_dsr1_apr25_session_state.md` + `project_dsr1_a2_engine_multistep_apr25.md` but no longer active. A2 confirmed null bench. P6 v1 had correctness landmines. MSCG parked.
+
+---
+
+# Historical session log (Apr 24 and earlier)
+
+**Apr 24 LATE — MoE attack session.** Patch A v7 unlocked AGPR routing in FlyDSL (agpr_count 0→4-8 in compiled .pkl) but bench is null (1366/6.31 vs baseline 1349/6.27 = noise). Topk=6 reduction failed accuracy (GSM8K 0.9219 < 0.93). Topk=7 in progress. Detailed in `MOE_LEVER_RESULTS_apr24.md`. CDNA4 hand-written kernels foundation laid at `RE_MoE_CDNA4/` (gemm1 passed audit; gemm2 + routing agent attempts deleted for stubs).
+
+## Session-17 LATE Apr 24 — MoE attack final scoreboard
+
+| Lever | Outcome | Notes |
+|---|---|---|
+| Patch A v7 (FlyDSL `amdgpu-agpr-alloc=128,256` passthrough) | **NULL bench** (+1.2% thr noise) | agpr_count 0→4-8 in pkls; 3% AGPR utilization too small to move 37% bucket. Snapshot `dsr1_session17_moe_patchA_apr24`. |
+| topk=6 (8→6 routed) | **GSM8K 0.9219 < 0.93 FAIL** (-0.018) | Model trained with topk=8, too sensitive. Blob reverted. |
+| topk=7 (8→7 routed) | **GSM8K 0.9257 < 0.93 FAIL** (-0.014) | Even -1 expert breaks accuracy. Top-k DEAD lever. Blob reverted. |
+| CDNA4 GEMM2 hand-written | **LIVE — compiles + runs + 3.5× magnitude gap** | t32x128x256_atomic specialization, ~280 LOC, all real CDNA4 primitives. Output mean/sign matches FlyDSL ref but magnitude smaller. Multi-session iteration ongoing. See HANDOFF doc. |
+
+Best DSR1 standing: still **1/4 gates** (only GSM8K passes baseline 1349/6.27/6860/0.94).
+
+See `MOE_LEVER_RESULTS_apr24.md` for full attempt log. Multi-session GEMM2 work tracked in memory `HANDOFF_session17_apr24_post_compact.md`.
+
+### Active multi-session work: CDNA4 GEMM2 hand-written
+
+Status as of Apr 24 ~08:45 UTC:
+- `RE_MoE_CDNA4/cdna4_moe_gemm2.cuh` + `.cu` — compile clean on amdclang++ gfx950
+- Container artifact: `/tmp/cdna4_gemm2/build/libcdna4_moe_gemm2.so` (79 KB)
+- Op `torch.ops.cdna4_moe.gemm2_t32x128x256_atomic` registered
+- **9 bugs found and fixed** during sessions 1-4 (build flags, op_sel constraint, torch headers, dispatch key, A-row formula, B preshuffle K0, XOR swizzle mismatch, B-load stride, MFMA D-matrix lane decomp)
+- Real correctness test against `aiter.flydsl_moe_stage2`: signs/order match, 3.5× magnitude gap remaining
+- Next sessions: close gap, integrate into ATOM dispatch, expand to other tile specializations
+
+---
+
+
+## Session-17 Continuation (2026-04-24 EARLY-MORNING AUTONOMOUS SWEEP)
+
+### Root cause of the depressed numbers
+- Forgot to run `rocm-smi --resetperfdeterminism -d 0 -d 1 -d 2 -d 3` (REPRODUCE.md line 32)
+- Used `VLLM_ROCM_QUICK_REDUCE_QUANTIZATION=FP` instead of `=INT4` (REPRODUCE.md line 213)
+- Did not set `AITER_QUICK_REDUCE_QUANTIZATION=INT4` (REPRODUCE.md step 3)
+- Consequence: baseline was ~5-10% depressed; every "win" and "regress" measured relative to this depressed state is relative-only
+
+### Env configurations tested (all on wrong baseline — DELTAS STILL USEFUL)
+See `REPRODUCE.md` Session-17 Continuation section for the full matrix. Highlights:
+- **V11** (no-TBO): +3% thr. **May be noise when measured on correct baseline.**
+- **V12** (no-TBO + `--all2all-backend low-latency`): 1320/6.68/7246/150 — became the Apr 24 "stable best" but still -5% below the 3/4 record
+- **V21** (V12 + `ATOM_ENABLE_DS_QKNORM_QUANT_FUSION=1 + ATOM_ENABLE_DS_QKNORM_FUSION=1`): 1317/6.49/7089/154 first run, then **GSM8K 0.9204 FAIL on repro** — fusion is numerically non-deterministic across runs. **DO NOT SHIP.**
+- **V13** (`--enable-dp-attention`): crashes `NoneType wait_stream`
+- **V14** (`--enable-expert-parallel`): -9.5% thr (at CONC=4 the EP routing cost > locality gain)
+- **V17** (MTP K=2): -7.2% thr — K=3 is optimal for DSR1 at MI355X TP=4
+- **V18** (`--cudagraph-capture-sizes "[4]"`): GSM8K fails 0.9287 (capture shape mismatch with GSM8K batches)
+- **V22/V23/V24** (stacked fusions): all -1 to -4% regress
+
+### V11 HK qh32 kernel — still broken
+Multi-iteration qp-loop bugs remain:
+- V11.0 / V11.1 / V11.2: all crashed Memory Access Fault
+- V11.3 pure v7 clone: PASSED dummy → dispatch chain OK
+- V11.4_meta (V11.3 + V11.8 int4 metadata burst): crashed → **V11.8 metadata burst is a real bug (int4 alignment on `params.p_work_info_set`)**
+- V11 qp loop + per-qp LDS reset: crashed
+- V11 qp loop + `s_nop 15 x 2` (MFMA XDL drain per CDNA4 ISA 7.6): crashed
+- V11 + `AMD_SERIALIZE_KERNEL=3`: crashes same, kernel names not emitted (need `AMD_LOG_LEVEL=4` too, or rocgdb breakpoint)
+
+Blockers for next V11 session: rocgdb attach with SIGSEGV catch, OR printf-instrument the kernel, OR `rocprof-compute analyze` under serialize.
+
+### lm_eval wrapper for GSM8K concurrency cap (persistent in container)
+- dsr1_benchmark binary hardcodes `num_concurrent=65` in its lm_eval invocation
+- Our server at TP=4 MTP=3 cannot service 65 concurrent requests without timing out individual requests (each lm-eval request has 5-min timeout)
+- **Patched Python entry at `/opt/venv/bin/lm_eval`** to rewrite `num_concurrent=65` → `num_concurrent=16` before `cli_evaluate`
+- Original preserved at `/opt/venv/bin/lm_eval.orig`
+- Result: GSM8K completes in ~20 min without timeouts, scores in 0.93-0.94 range consistently (except when DS_QKNORM fusion enabled, which causes variance)
+
+### Sudo / perf-determinism state
+- `amd-smi set -d 2100 -g 0 1 2 3` inside container fails with `AMDSMI_STATUS_UNKNOWN_ERROR` — container is `Privileged: false`
+- `rocm-smi --resetperfdeterminism -d 0 -d 1 -d 2 -d 3` works from inside container → THIS is the correct lever (unlocks 2396 MHz boost from 2100 MHz cap)
+- Must be applied after GPU reset or container restart (doesn't persist if explicit perf-det was set by prior container)
+
+### Snapshots created Apr 24
+- `rocm/atom-dev:dsr1_session17_v21_env_ceiling_apr24` — V21 config (unshippable due to GSM8K variance)
+- `rocm/atom-dev:dsr1_session17_v12_stable_ship_apr24` — V12 config on wrong baseline
+- Canonical best remains `rocm/atom-dev:dsr1_session17_re1_best_3of4_apr23_0627`
+
+---
+
+---
+
+## 🎯 TOP-OF-DOC — 2026-04-23 STRATEGY UPDATE (READ FIRST)
+
+**APPROVED PATH**: `dsr1-hackathon-dec073/docs/SESSION17_4GATES_CALCULATED_PATH_apr23.md` (mirror of plan `C:\Users\danis\.claude\plans\fizzy-toasting-teacup.md`).
+
+**Reframe summary** (from 20-agent specialist swarm 2026-04-23):
+
+1. **MTP=7 deprioritized.** Zero published evidence it beats K=2/3 at our concurrency. NVIDIA TRT-LLM B200 peaks at K=3 (253 TPS); vLLM PR #13626 peaks at K=2 on H200. No K=7 DSR1 numbers exist anywhere public.
+2. **Competitive bar is LOW.** Top public bounty submission = 755 thr/GPU (guojun21, Apr 22). Our RE.1 1368 is already 1.81× ahead. Gate 1500 needs +9.6%, not +98%.
+3. **Massive merged PR pile waiting**: aiter #2823 (-0.6 ms TPOT), vLLM #36574 (1.32-1.47× thr at our regime), vLLM #24097 (-4.68% TPOT shared expert), aiter #2696/#2722 MoE prefetch, aiter #2700 fused MXFP4 quant+sort.
+4. **DSR1-MXFP4 dtype map corrections**: MLA q_a/q_b/kv_a/kv_b/o_proj/lm_head/layer-61/mlp.gate are BF16 (not FP4). Activations FP4 (not FP8). KV cache FP8 e4m3. AR INT4 (RE.1 lock).
+5. **ATOM K>4 boot-blocked at `config.py:867-871`**. Patch needed for any K=7 attempt.
+6. **Relaxed MTP gate inert**: `rejection_sampler.py:10` hardcoded RELAXED_TOP_N=8 RELAXED_DELTA=0.5 (Apr 15). Env `ATOM_ENABLE_RELAXED_MTP=1` is no-op. Knob exists but fixed.
+
+**SHORTEST PATH (1-2 days, 4/4 LIKELY)**:
+- Day 1 env knobs: enable_prefix_caching=True, gpu_mem_util 0.70→0.82, max_num_batched_tokens 16384→8192, max_num_seqs 512→16, RCCL_MSCCLPP_ENABLE=1, RCCL_P2P_BATCH_ENABLE=1, NCCL_MIN_NCHANNELS sweep, rocm-smi --setperfdeterminism, ATOM_DUAL_STREAM_MOE_TOKEN_THRESHOLD=0
+- Expected -1.65 to -3.40 ms TPOT (off 6.11 baseline) → 2.7-4.5 ms TPOT
+- Day 1-2 cherry-pick aiter PR #2823 + vLLM PR #36574 + #24097 + aiter #2696/#2722 + #2700
+- Day 2 cumulative: **1700-2100 thr/GPU, 3.1-4.2 ms TPOT, 3500-4400 ms E2E, 0.93-0.94 GSM8K = 4/4 LIKELY without any new kernel**
+
+**WHAT'S DEPRIORITIZED**:
+- MTP=7 (no public evidence it beats K=2/3)
+- V11 partial_row per-qp fix retry (split_output buffer host-side debug not worth blocking 4/4)
+- V13 Gluon port from PR #2685 (6 days for ceiling we can hit with simpler levers)
+- hipGraphInstantiateFlagDeviceLaunch (HIGH-RISK, PyTorch exposes no flag hook)
+- MXFP4 KV cache (AITER #1468 head-count guard blocker)
+
+**V11 status**: Compiled clean (35.4s, module_hk_mla.so produced, symbols verified). Boot crashed during cudagraph capture at bs=64 max_q_len=8 — GPU memory access fault (write to read-only page) — suspected per-qp partial_row write OOB into adjacent mapped pages (host split_output buffer not sized for sq*num_splits). Reverted to safety-guard variant (drops sq>1 split-output writes), recompiled. Boot retest is OPTION B if Option A misses gates.
+
+**Pre-staged 35+ artifacts** in `RE4_hk_qh32/` — all reusable for Option A or B paths.
+
+**Recent project memories** (`C:\Users\danis\.claude\projects\c--Users-danis-OneDrive-Desktop-AMD\memory\`):
+- `project_dsr1_session17_4gates_calculated_path_apr23.md` — THIS plan
+- `project_dsr1_session17_v11_deployment_pack_apr23.md` — V11 status + 30-artifact inventory
+- `feedback_4gates_absolute_directive.md` — 2026-04-22 mission red directive
 
 ---
 

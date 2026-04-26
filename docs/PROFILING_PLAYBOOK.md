@@ -1,5 +1,106 @@
 # Profiling Playbook — replicating today's DSR1 investigation for any MI355X workload
 
+## 🆕 Apr 25 — DSR1-MXFP4 TP=4 CONC=4 MTP=3 DECODE PROFILE (full kernel breakdown)
+
+**Capture method**: torch.profiler embedded in `model_runner.forward()` via `ATOM_DECODE_PROFILE_DIR` env (custom patch — see "Embedded torch.profiler patch" section below). Skipped first 20 forwards, captured #20-#120 (100 decode forwards) on rank 0. Output: `/tmp/decode_profile/decode_top_kernels.csv` (673 unique kernels) + `/tmp/decode_profile/decode_trace.json` (433 MB chrome trace).
+
+**Bench under profile**: TPOT 6.40 ms (within today's variance vs un-profiled 6.38 ms baseline → profiler overhead ≤ 0.5%).
+
+### Top kernels by `gpu_total_us` (per 100 decode forwards, rank 0)
+
+| # | Kernel | gpu_total_us | calls | µs/call | calls/fwd | µs/forward |
+|---|---|---:|---:|---:|---:|---:|
+| 1 | `aiter::moe_forward` (Python wrapper, parent) | 1,181,363 | 4244 | 278 | 42 | 11,814 |
+| 2 | `aiter::fused_moe_` (custom op, parent) | 1,164,370 | 4244 | 274 | 42 | 11,644 |
+| 3 | `reduce_scatter_cross_device_store<bf16; 4>` | 946,348 | 11533 | 82 | 115 | 9,463 |
+| 4 | **`moe_gemm1_0`** | **871,837** | **5626** | **155** | **56** | **8,718** |
+| 5 | `fused_allreduce_rmsnorm_` | 562,384 | 8596 | 65 | 86 | 5,624 |
+| 6 | **`moe_gemm2_0`** | **561,663** | **5626** | **100** | **56** | **5,617** |
+| 7 | `ck::kernel_moe_mxgemm_2lds<...f4x2_pk_t...>` (FP4 MoE, prefill big-batch) | 557,999 | 112 | 4982 | 1.1 | 5,580 |
+| 8 | `aiter::unified_attention_with_output_base` (parent) | 537,565 | 4448 | 121 | 44 | 5,376 |
+| 9 | `gemm_a16w16` (BF16 attention proj, hipBLASLt) | 476,094 | 18872 | 25 | 189 | 4,761 |
+| 10 | `aten::mm` | 458,454 | 16240 | 28 | 162 | 4,585 |
+| ~21 | `hipGetDeviceProperties` (HIP API — wasted) | 159,471 | **119318** | 1.3 | **1193** | 1,595 |
+
+### Per-forward breakdown (interpretation)
+
+- **Forward wall time**: 19.45 ms (= TPOT 6.55 × 2.97 toks/forward acceptance)
+- **MoE GEMM1+GEMM2 alone**: 14.3 ms/forward of GPU time (74% of forward — biggest bucket)
+- **Reduce_scatter (MoE all-to-all)**: 9.46 ms/forward of GPU — but mostly OVERLAPPED via dual-stream MoE; not all on critical path
+- **Attention bucket** (MLA decode + projections): ~5.4 ms/forward — already AITER-optimized
+- **`hipGetDeviceProperties` host overhead**: ~1.5 ms/forward host time (wasted — see source below)
+- **AR+RMSNorm fused** (`fused_allreduce_rmsnorm_`): 5.6 ms/forward, 86 calls/forward = ~65 µs/call. Already fused, limited room.
+
+⚠ The GPU times sum to >100% of wall because TP=4 has 4 GPU streams running in parallel and parent ops include child kernel time (double counting).
+
+### Wasted host call source (1193x/forward)
+
+`torch.cuda.get_device_properties()` is called from 4 sites in `aiter/ops/attention.py:186/729/829/921`. Each attention layer asks "how many CUs does this GPU have?" — the answer is constant. Caching once at module import would eliminate 1.5 ms/forward of pure host overhead.
+
+```python
+# Memoization fix: at top of aiter/ops/attention.py
+_DEV_PROPS_CACHE = {}
+def _cached_get_device_properties(device):
+    if device not in _DEV_PROPS_CACHE:
+        _DEV_PROPS_CACHE[device] = torch.cuda.get_device_properties(device)
+    return _DEV_PROPS_CACHE[device]
+```
+
+### Engineering targets ranked by expected ΔTPOT
+
+| Target | Lever | ΔTPOT estimate | Effort |
+|---|---|---|---|
+| **MoE GEMM1+GEMM2** | Wire `t32x256_atomic_persist` from aiter (exists, just unwired in dispatcher) | **−0.3 to −0.7 ms** | Multi-day |
+| **Wasted hipGetDeviceProperties** | Memoize at module import | **−0.05 to −0.20 ms** | 5 min |
+| Reduce_scatter | Mostly overlapped — limited room | small | — |
+| Multi-step CG K=2 (Step 5) | Forward routing rewire | -0.1 to -0.3 ms | 1-2 days |
+| Attention | Already AITER ASM-tuned | negligible | — |
+
+### Embedded torch.profiler patch (the ONLY way that worked for TP=4 multi-process)
+
+rocprofv3 attach failed (LD_PRELOAD doesn't propagate to multiprocessing.spawn workers; `--pid` mode requires CAP_SYS_PTRACE we don't have; SIGTERM to wrapped boot doesn't flush CSV). The reliable approach: embed torch.profiler INSIDE `model_runner.forward()`.
+
+Patch script: `/tmp/apply_decode_profiler.py` adds:
+- env vars `ATOM_DECODE_PROFILE_DIR`, `ATOM_DECODE_PROFILE_SKIP` (default 20), `ATOM_DECODE_PROFILE_NUM` (default 100)
+- inside `forward()`: counts decode steps, starts torch.profiler at SKIP, stops after NUM, dumps both chrome trace + flat top-kernels CSV
+- only activates on rank 0
+- backup at `model_runner.py.pre_decode_profiler`
+
+Boot script `/tmp/boot_decode_profile.sh` sets env + boots. After boot, just run the bench normally — profiler captures automatically.
+
+### Tools used to analyze
+
+- **`/app/ATOM/tools/parse_trace.py`** — layer-by-layer kernel breakdown of chrome trace
+- **`/app/ATOM/tools/analyze_trace_summary.py`** — per-phase (prefill/decode/draft) summary
+- HTTP `/start_profile` and `/stop_profile` endpoints exist on ATOM server BUT require `--torch-profiler-dir` set at boot (env-only doesn't work — CLI flag needed)
+
+---
+
+## 🚨 Apr 24 POST-MORTEM: rocprofv3 + multi-TP server DOES NOT WORK in our env
+On Apr 24 we attempted to profile the DSR1 server using `rocprofv3 --kernel-trace --hip-trace --rccl-trace --memory-copy-trace --stats -f csv` wrapping the whole `atom.entrypoints.openai_server` process. **Outcome:**
+- Server booted, bench completed (10-min slowdown from tracing overhead)
+- SIGTERM to server: rocprofv3 reported "caught signal 15, will wait for 2 children to exit"
+- **Rocprofv3 NEVER flushed the CSV files**. `/tmp/rocprof_out/` stayed empty. Data lost on SIGKILL.
+- Root cause: TP=4 spawns 4 ModelRunner processes. Their shared memory cleanup hangs on shutdown, rocprofv3 waits forever for children. The only way to exit is SIGKILL, which skips the trace flush.
+
+### Working alternatives for our TP=4 atom server
+1. **`rocprofv3 --output-format rocpd`** — writes SQLite incrementally. Data survives SIGKILL.
+2. **`rocprofv3 --collection-period <ms>`** — auto-stops and flushes after fixed duration.
+3. **`rocprofv3-attach`** with `ROCPROF_ATTACH_PID` + `ROCPROF_ATTACH_DURATION` env — attaches to running server for a bounded window, then detaches cleanly.
+4. **`rocprof-sys-sample`** — statistical sampler, doesn't need clean exit.
+
+### `rocprof-compute` has broken deps in our container
+`/opt/rocm/bin/rocprof-compute` exists but fails on missing Python deps: plotext, dash, kaleido, textual, astunparse, colorlover, dash-svg, dash-bootstrap-components, pymongo, sqlalchemy, textual_plotext, textual-fspicker. Fix by `pip install -r /opt/rocm-7.2.2/libexec/rocprofiler-compute/requirements.txt` OR use rocprofv3 directly.
+
+### AMD_SERIALIZE_KERNEL=3 alone doesn't emit kernel names
+To get the faulting kernel name on Memory Access Fault, you need **both**:
+- `AMD_SERIALIZE_KERNEL=3` (sequential kernel execution)
+- `AMD_LOG_LEVEL=4` (emit kernel names)
+
+Otherwise the serialize env forces sequential but the log stays silent → you see "Memory access fault, Reason: Unknown" with no context.
+
+---
+
 **Context**: On Apr 22 (session-14) we spent a day chasing a "wrapper regression" on DSR1 and learned that:
 1. The leaderboard wrapper does NOT match what you measure with your team's in-tree bench
 2. Small flag differences (`--use-chat-template`) can completely change the bottleneck regime (host-bound → kernel-bound)
