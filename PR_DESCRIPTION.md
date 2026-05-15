@@ -15,6 +15,8 @@ The lever delivers a measured **−0.661 ms TPOT** (6.302 → 5.641 ms), **+1 ga
 
 The change ships as an **env-gated NULL-OP** (default OFF — `ATOM_ENABLE_PER_PHASE_RELAXED_MTP=0` means stock behavior is bit-identical). Enable with `=1` to activate.
 
+### Result @ CONC=4 (Apr 30 measurement, official kimbochen harness, with Phase 11 v3)
+
 | Metric | Stock baseline (L0-v2) | This PR (Phase 11 v3) | Δ | Gate |
 |---|---:|---:|---:|---|
 | GSM8K (N=3 median) | 0.9386 | **0.9318 PASS** | −0.0068 | ≥ 0.93 ✅ |
@@ -25,6 +27,25 @@ The change ships as an **env-gated NULL-OP** (default OFF — `ATOM_ENABLE_PER_P
 | **Gates** | **1/4** | **2/4** | **+1** | |
 
 Evidence: [`bench_results/apr30_phase11_per_phase_mtp_v3_KEEP_2of4/`](bench_results/apr30_phase11_per_phase_mtp_v3_KEEP_2of4/) — raw kimbochen JSON, GSM8K logs, boot log.
+
+### Result @ CONC=32 — bonus multi-CONC reference (Apr 27, official kimbochen harness, A27 baseline stack)
+
+The same submission stack **minus** the Phase 11 v3 sampler kernel (the Apr 30 lever was added on top of A27) was independently measured at CONC=32 under the official harness on Apr 27:
+
+| Metric | A27 baseline @ CONC=32 | Gate | Status |
+|---|---:|---:|:---:|
+| GSM8K (single run) | **0.9431** | ≥ 0.93 | ✅ PASS |
+| **Interactivity** | **56.17** | ≥ 50 | ✅ PASS (+12% margin) |
+| Median E2E | 19044 ms | ≤ 18000 | ❌ FAIL (−5.8%) |
+| Tput/GPU | 3831 | ≥ 3900 | ❌ FAIL (−1.8%) |
+| TPOT median | 17.80 ms | — | — |
+| **Gates** | **2/4** | | |
+
+**Honest caveat**: this CONC=32 measurement pre-dates Phase 11 v3 by 3 days. We did **NOT** explicitly re-bench CONC=32 after deploying Phase 11 v3 on Apr 30. Because Phase 11 v3 is a sampler change (not concurrency-specific), it would likely improve CONC=32 too — but that improvement is **projected, not measured**.
+
+**Why this matters for AMD's continued optimization**: the failing gates at CONC=32 are within striking distance (E2E −5.8%, Tput −1.8%) vs the much larger gaps at CONC=4 (E2E −24%, Tput −16%). The Apr 27 CONC=32 reference memo notes: *"CONC=32 likely closes 4/4 before CONC=4 as levers stack."* For follow-up work, **CONC=32 is the closer-to-closeable concurrency point**.
+
+Evidence: [`docs/Daily Updates/MASTER.md`](docs/Daily%20Updates/MASTER.md) §"A27 CONC=32 reference" + [`bench_results/apr26/conc32_warm_run{1,2}.json`](bench_results/apr26/) (Apr 26 informal-bench multi-CONC reference; different harness parameters).
 
 ---
 

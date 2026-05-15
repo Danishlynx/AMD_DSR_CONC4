@@ -9,6 +9,8 @@
 
 ## TL;DR
 
+**CONC=4** (Apr 30, official kimbochen harness, with Phase 11 v3 applied):
+
 | Metric | Stock baseline (L0-v2) | **This submission** | Δ | Gate |
 |---|---:|---:|---:|---|
 | GSM8K (N=3 median) | 0.9386 | **0.9318 PASS** | −0.0068 | ≥ 0.93 ✅ |
@@ -17,6 +19,19 @@
 | **Interactivity (tok/s/user)** | 158.68 FAIL | **177.26 PASS** | **+18.58** | ≥ 165 ✅ |
 | Median E2E latency | 6723 ms | 6210 ms | −513 ms | ≤ 5000 ❌ (off 1210) |
 | **Gates** | **1/4** | **2/4** | **+1** | |
+
+**CONC=32** (Apr 27, official kimbochen harness — measured on the A27 baseline stack that Phase 11 v3 builds on top of):
+
+| Metric | A27 baseline @ CONC=32 | Gate | Status |
+|---|---:|---:|:---:|
+| GSM8K (single run) | **0.9431** | ≥ 0.93 | ✅ PASS |
+| **Interactivity (tok/s/user)** | **56.17** | ≥ 50 | ✅ PASS (+12% margin) |
+| Median E2E latency | 19044 ms | ≤ 18000 | ❌ FAIL (−5.8%) |
+| Throughput per GPU | 3831 | ≥ 3900 | ❌ FAIL (−1.8%) |
+| TPOT median | 17.80 ms | — | — |
+| **Gates** | **2/4** | | |
+
+*Same stack as Apr 30 CONC=4 minus the Phase 11 v3 sampler kernel; Phase 11 v3 is concurrency-agnostic and would likely improve CONC=32 too, but we did not explicitly re-bench CONC=32 after Apr 30. **At CONC=32 the missing gates are within striking distance (E2E −5.8%, Tput −1.8%)**, suggesting CONC=32 4/4 may actually be reachable before CONC=4 4/4 as further levers stack.*
 
 **Headline lever**: port of TRT-LLM's `use_relaxed_acceptance_for_thinking: true` (with `relaxed_topk=10`, `relaxed_delta=0.6` — TRT-LLM's published values) to ATOM/AITER for DeepSeek-R1 on MI355X. Per-phase Triton sampler tracks each sequence's `<think>...</think>` reasoning phase on a GPU-resident `int8[max_num_seqs]` tensor and applies relaxed acceptance **only inside thinking**, never stricter than the baseline elsewhere.
 

@@ -6,6 +6,8 @@
 
 **Outcome**: **2/4 gates** (GSM + Interactivity) at TPOT 5.641 ms / Tput 1449 / GSM 0.9318 / Intvty 177.26, via the Phase 11 per-phase relaxed-MTP lever (TRT-LLM port). Remaining 2 gates (E2E, Tput) require multi-week architectural work (megakernel HIP / FP4 weight-loading L1 redo) characterized in §6.
 
+**Bonus reference @ CONC=32**: the same submission stack (Apr 27 measurement on A27 baseline — 3 days before Phase 11 v3 was added Apr 30) was independently measured under the official harness at CONC=32 and scored **2/4 gates** (GSM 0.9431 PASS, Interactivity 56.17 PASS; E2E 19044 ms and Tput/GPU 3831 missed by 5.8% and 1.8% respectively). We did not re-bench CONC=32 after Phase 11 v3 landed — that improvement is projected, not measured. The failing gates at CONC=32 are within striking distance (E2E −5.8%, Tput −1.8%) vs the larger CONC=4 gaps (E2E −24%, Tput −16%); per the Apr 27 reference memo, **CONC=32 4/4 is likely reachable before CONC=4 4/4** as further levers stack.
+
 This document explains how that result was reached, what was measured, what was discarded, and why.
 
 ---
