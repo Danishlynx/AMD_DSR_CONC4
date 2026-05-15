@@ -1,6 +1,6 @@
 # DSR1 / MI355X CONC=4 — Phase 11 Per-Phase Relaxed-Acceptance MTP v3 (TRT-LLM Thinking Port)
 
-> **Result**: 2/4 official kimbochen gates at CONC=4 via −0.661 ms TPOT. Env-gated NULL-OP. Port of TRT-LLM's `use_relaxed_acceptance_for_thinking` to ATOM/AITER.
+> **Result**: 2/4 official kimbochen gates at CONC=4. Phase 11 v3 delivers **−0.661 ms TPOT** under the official kimbochen N=3 harness — the lever that crosses Interactivity from FAIL → PASS. Env-gated NULL-OP at default.
 
 | | |
 |---|---|
@@ -8,7 +8,7 @@
 | **Feature branch** | `feature/phase11_v3_thinking_port` |
 | **Base** | `main` (pristine ATOM upstream snapshot) |
 | **Best snapshot** | `rocm/atom-dev:dsr1_apr30_phase11_v3_2of4` (sha `c58cf2ce4512`) |
-| **Harness** | `kimbochen/dsr1_benchmark.cpp` — ISL=8192, OSL=1024, num_prompts=40, conc=4, num_warmups=8, 4-iter median(2,3,4); GSM8K N=3 median ≥ 0.93 |
+| **Authoritative harness** | `kimbochen/dsr1_benchmark.cpp` — ISL=8192, OSL=1024, num_prompts=40, conc=4, num_warmups=8, 4-iter median(2,3,4) × N=3 boots; GSM8K via lm_eval N=3 median ≥ 0.93 |
 | **Activation** | `ATOM_ENABLE_PER_PHASE_RELAXED_MTP=1` (default `0` = bit-identical to upstream) |
 
 ---
@@ -17,11 +17,11 @@
 
 Ports TRT-LLM's `use_relaxed_acceptance_for_thinking: true` (with `relaxed_topk=10`, `relaxed_delta=0.6`) to ATOM/AITER for DeepSeek-R1 on MI355X. A per-sequence phase-tracking Triton sampler applies relaxed acceptance **only inside `<think>...</think>` reasoning blocks**, matching the baseline `RELAXED_TOP_N=8` elsewhere — so the lever is **never stricter than baseline anywhere**.
 
-The single largest first-party TPOT-reducing change of the campaign: **−0.661 ms TPOT** (6.302 → 5.641 ms), **+1 gate** (1/4 → 2/4 — crosses the Interactivity gate), GSM8K passes with margin.
+**Under the official kimbochen N=3 harness, this PR delivers −0.661 ms TPOT** (6.302 → 5.641 ms), **+1 gate** (1/4 → 2/4) — crosses the Interactivity gate from 158.68 (FAIL) → 177.26 (PASS).
 
 ---
 
-## Result (CONC=4, official kimbochen harness, Apr 30)
+## Authoritative result (CONC=4, official kimbochen N=3 harness, Apr 30)
 
 | Metric | Baseline (L0-v2) | Phase 11 v3 | Δ | Gate | Status |
 |---|---:|---:|---:|---:|:---:|
@@ -34,42 +34,49 @@ The single largest first-party TPOT-reducing change of the campaign: **−0.661 
 
 Evidence: [`submission/bench_results/apr30_phase11_per_phase_mtp_v3_KEEP_2of4/`](submission/bench_results/apr30_phase11_per_phase_mtp_v3_KEEP_2of4/) — raw kimbochen JSON, GSM8K log, boot log.
 
-### Bonus reference @ CONC=32 (Apr 27, A27 baseline — pre-Phase-11-v3)
+### Bonus reference @ CONC=32 (Apr 27, A27 baseline, official harness — pre-Phase-11-v3)
 
-Same stack minus the Phase 11 v3 sampler kernel also scored **2/4 gates** at CONC=32: GSM 0.9431 PASS, Interactivity 56.17 PASS; E2E off 5.8%, Tput/GPU off 1.8%. Phase 11 v3 wasn't re-benched there (projected improvement, not measured). The smaller gaps at CONC=32 suggest it's closer to 4/4 than CONC=4.
-
----
-
-## Cumulative TPOT-reduction trajectory (5-week campaign)
-
-The 5.641 ms TPOT figure is the **end state** of a stack of levers. **Phase 11 v3 (this PR) is the single largest first-party source-level contribution** but not the only lever:
-
-| # | Lever | Type | TPOT Δ | Cumulative |
-|---|---|---|---:|---:|
-| 0 | Vanilla TP=8 MTP=3 fp8 KV | — | — | ~7.88 ms (TP=4 baseline) |
-| 2 | **`ATOM_ENABLE_RELAXED_MTP=1`** (stock ATOM flag — was OFF by default) | env flag | **−2.29 ms** | 5.59 ms |
-| 4 | RCCL_MSCCLPP knobs (ROCm 7.1+) | env flags | −0.18 ms | 5.41 ms |
-| 5 | `rocm-smi --resetperfdeterminism` (SCLK 2100 → 2396 MHz) | platform | −0.08 ms | 5.33 ms |
-| 6 | **`--cudagraph-capture-sizes [1,2,4,8,16,32]`** | CLI flag | **−1.41 ms** | 4.84 ms *(warm)* |
-| — | *Apr 27: official-harness re-baseline (N=3)* | — | — | **6.171 ms** |
-| 10 | `ATOM_CUDAGRAPH_MODE=FULL_DECODE_ONLY` (L0-v2) | env flag | **−0.166 ms** | 6.005 ms |
-| 11 | **Phase 11 v3 — TRT-LLM thinking port** ⭐ *(this PR)* | **first-party Triton kernel + plumbing** | **−0.661 ms** | **5.641 ms** |
-
-### Summary by category
-
-| Category | Δ TPOT |
-|---|---:|
-| Stock ATOM env flags (were OFF) | −2.29 ms |
-| CLI / cudagraph configuration | −1.58 ms |
-| **First-party source-level kernel (this PR)** | **−0.661 ms** |
-| Comm + platform knobs | −0.26 ms |
-| **Net** | **−2.24 ms / −28%** |
-
-**What this PR specifically delivers**: the **−0.661 ms** from the Phase 11 v3 Triton kernel + dispatcher + env-flag plumbing. The other levers are pre-existing flags AMD/ATOM ship (just need to be ON) or CLI configurations. **Phase 11 v3 is the source-code change** — and it's the lever that crosses Interactivity from 158.68 (FAIL) → 177.26 (PASS).
+Same stack minus the Phase 11 v3 sampler kernel also scored **2/4 gates** at CONC=32 (Apr 27): GSM 0.9431 PASS, Interactivity 56.17 PASS; E2E off 5.8%, Tput/GPU off 1.8%. Phase 11 v3 wasn't re-benched at CONC=32 — would likely improve there too (it's concurrency-agnostic) but **projected, not measured**.
 
 ---
 
-## Mechanism
+## TPOT reductions under the official kimbochen N=3 harness (authoritative)
+
+Two levers were measured under the canonical harness in this campaign — both ship in this submission's feature branch:
+
+| # | Lever | Type | TPOT before | TPOT after | TPOT Δ | Status |
+|---|---|---|---:|---:|---:|:---:|
+| 1 | `ATOM_CUDAGRAPH_MODE=FULL_DECODE_ONLY` (L0-v2) | env flag | 6.106 ms | 5.940 ms | **−0.166 ms** | ✅ measured Apr 29 |
+| 2 | **Phase 11 v3 — TRT-LLM thinking port** *(this PR)* ⭐ | **first-party Triton kernel** | 6.302 ms | **5.641 ms** | **−0.661 ms** | ✅ measured Apr 30 |
+
+**Both measurements come from the official kimbochen 4-iter median(2,3,4) × N=3 boots methodology.** Baselines differ across days (6.106 vs 6.302) due to ±0.25 ms cross-boot noise — both deltas were validated on their own day's baseline.
+
+**Authoritative reduction from Apr 27 A27 baseline (6.171 ms) to final state (5.641 ms): −0.530 ms net.** Phase 11 v3 in this PR contributes **−0.661 ms** measured on its own daily baseline.
+
+---
+
+## Historical context (informal-bench era — NOT authoritative)
+
+Earlier in the campaign (Apr 14–26), TPOT improvements were tracked on an **informal bench** (`--random-range-ratio=0.8`, 1 warmup, varying num_prompts). Several stock ATOM env flags / CLI configs were turned ON during this era:
+
+| Lever | Type | Informal-bench Δ (NOT authoritative) |
+|---|---|---:|
+| `ATOM_ENABLE_RELAXED_MTP=1` (stock ATOM, was OFF) | env flag | (historical −2.29 ms) |
+| `VLLM_ROCM_QUICK_REDUCE_QUANTIZATION=INT4` | env flag | (small) |
+| RCCL_MSCCLPP knobs (ROCm 7.1+) | env flags | (historical −0.18 ms) |
+| `rocm-smi --resetperfdeterminism` (SCLK boost) | platform | (historical −0.08 ms) |
+| `--cudagraph-capture-sizes [1,2,4,8,16,32]` | CLI flag | (historical −1.41 ms) |
+| 8-curl warmup pattern | bench discipline | absorbed into above |
+| `RELAXED_TOP_N` 8 → 9 | sampler | (small) |
+| `ATOM_MSCG_K` unset | config | (historical −0.05 ms) |
+
+**Important**: when the FULL stack of these informal-bench levers was re-measured Apr 27 under the official kimbochen N=3 harness, the result was **TPOT 6.171 ms** ("A27 baseline") — **not the 4.84 ms the informal bench had reported**. The informal-bench numbers were partly mirage (different `--random-range-ratio`, fewer warmups, different harness behavior).
+
+**These levers are part of the production stack** (they ship enabled in the boot script — see `Activation` below), but the per-lever ΔTPOTs in the table above are **historical, not authoritative under the canonical harness**.
+
+---
+
+## Mechanism (Phase 11 v3)
 
 DSR1-R1 emits explicit reasoning blocks delimited by `<think>...</think>` tokens (IDs `128798` open / `128799` close). The two phases have **different logit-distribution shapes**:
 
@@ -100,7 +107,7 @@ All changes are env-gated; with `ATOM_ENABLE_PER_PHASE_RELAXED_MTP` unset, behav
 | `atom/model_engine/model_runner.py` | Allocates `self.spec_phase = torch.zeros(max_num_seqs, int8, cuda)`; registers via setter on `rejection_sampler` module; resets prefill-slot phases on new request (Python-side, outside the captured cudagraph) |
 | `atom/model_ops/rejection_sampler.py` | Module-level `_spec_phase_tensor` + setter. New `rejection_phased_sample_kernel`: dual top-N branches (strict=8 / relaxed=10) selected per-sequence by phase, `tl.load`/`tl.store` phase scan (cudagraph-safe), commit-token scan for `<think>`/`</think>` IDs. Env-gated dispatch. |
 
-**Total**: ~210 LOC added, ~30 modified across 3 files. **No upstream lines deleted.**
+**Total**: ~210 LOC added, ~30 modified across 3 files. **0 upstream lines deleted.**
 
 Patch scripts: [`submission/patches/scripts/phase11_per_phase_mtp/`](submission/patches/scripts/phase11_per_phase_mtp/) — `v1_initial.py` → `v2_triton_type_fix.py` → `v3_top8_outside_thinking_fix.py` (KEEP).
 
@@ -112,19 +119,23 @@ Captured cleanly under `ATOM_CUDAGRAPH_MODE=FULL_DECODE_ONLY` for batch sizes `[
 
 - Phase tensor lives at **fixed GPU storage** (allocated at runner init, never reallocated)
 - Triton kernel uses only `tl.load` / `tl.store` — no Python `setattr`, no host-side D2H copies in the forward path
-- Phase reset on new request happens at **prefill** time, **before** the captured decode graph fires (Python op outside captured region)
+- Phase reset on new request happens at **prefill** time, **before** the captured decode graph fires
 
 ---
 
 ## Activation
 
 ```bash
-# Required (the 2/4-gates configuration):
+# This PR's lever:
 export ATOM_ENABLE_PER_PHASE_RELAXED_MTP=1
 
-# Pre-existing flags that must also be set:
-export ATOM_CUDAGRAPH_MODE=FULL_DECODE_ONLY
-export ATOM_ENABLE_RELAXED_MTP=1
+# Pre-existing flags that the boot script also sets (= the production stack):
+export ATOM_CUDAGRAPH_MODE=FULL_DECODE_ONLY     # L0-v2 lever (-0.166 ms, also measured under official harness)
+export ATOM_ENABLE_RELAXED_MTP=1                # stock ATOM flag (was OFF by default)
+export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION=INT4
+export RCCL_MSCCLPP_ENABLE=1 RCCL_MSCCLPP_THRESHOLD=1048576 RCCL_P2P_BATCH_ENABLE=1
+# Plus --cudagraph-capture-sizes [1,2,4,8,16,32] on the server CLI
+# Plus rocm-smi --resetperfdeterminism cold-boot step
 ```
 
 ---
@@ -160,8 +171,8 @@ docker exec dsr1_repro bash /tmp/run_gsm8k_n3.sh            # GSM8K N=3 median
 
 ## See also
 
-- [`submission/TECHNICAL_APPROACH.md`](submission/TECHNICAL_APPROACH.md) — profiling + bottleneck attribution + lever mechanism
-- [`submission/PERFORMANCE_METRICS.md`](submission/PERFORMANCE_METRICS.md) — full performance metrics breakdown
+- [`submission/TECHNICAL_APPROACH.md`](submission/TECHNICAL_APPROACH.md) — profiling + bottleneck attribution + lever mechanism + measurement discipline
+- [`submission/PERFORMANCE_METRICS.md`](submission/PERFORMANCE_METRICS.md) — detailed performance metrics + harness regime separation
 - [`submission/README.md`](submission/README.md) — submission overview
 
 ---
