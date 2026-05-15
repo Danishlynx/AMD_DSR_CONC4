@@ -1,263 +1,260 @@
-# AMD Phase 2 Hackathon — DSR1 Track Submission
+<div align="center" id="logo">
+<img src="docs/assets/atom_logo.png" alt="logo" width="400" margin="10px"></img>
 
-**Branch**: `main` (clean submission)
-**Author**: Danish Lynx (`danishlynx@gmail.com`)
-**Best snapshot**: `rocm/atom-dev:dsr1_apr30_phase11_v3_2of4` (sha `c58cf2ce4512`)
-**Harness**: official `kimbochen/dsr1_benchmark.cpp` — ISL=8192, OSL=1024, num_prompts=40, max-concurrency=4, num_warmups=8, 4-iter median(2,3,4), GSM8K N=3 median ≥ 0.93
+[![CI](https://github.com/ROCm/ATOM/actions/workflows/atom-test.yaml/badge.svg)](https://github.com/ROCm/ATOM/actions/workflows/atom-test.yaml)
+[![Benchmark](https://github.com/ROCm/ATOM/actions/workflows/atom-benchmark.yaml/badge.svg)](https://github.com/ROCm/ATOM/actions/workflows/atom-benchmark.yaml)
+[![Dashboard](https://img.shields.io/badge/Performance-Dashboard-blue)](https://rocm.github.io/ATOM/benchmark-dashboard/)
 
----
+</div>
 
-## TL;DR
+--------------------------------------------------------------------------------
 
-**CONC=4** (Apr 30, official kimbochen harness, with Phase 11 v3 applied):
+**ATOM** (AiTer Optimized Model) is a lightweight vLLM-like implementation, focusing on integration and optimization based on [AITER](https://github.com/ROCm/aiter).
 
-| Metric | Stock baseline (L0-v2) | **This submission** | Δ | Gate |
-|---|---:|---:|---:|---|
-| GSM8K (N=3 median) | 0.9386 | **0.9318 PASS** | −0.0068 | ≥ 0.93 ✅ |
-| **TPOT median** | 6.302 ms | **5.641 ms** | **−0.661 ms** | drives E2E + Intvty |
-| **Throughput per GPU** | 1387 | **1449** | **+62** | ≥ 1500 ❌ (off 51) |
-| **Interactivity (tok/s/user)** | 158.68 FAIL | **177.26 PASS** | **+18.58** | ≥ 165 ✅ |
-| Median E2E latency | 6723 ms | 6210 ms | −513 ms | ≤ 5000 ❌ (off 1210) |
-| **Gates** | **1/4** | **2/4** | **+1** | |
+## 🚀 Features
 
-**CONC=32** (Apr 27, official kimbochen harness — measured on the A27 baseline stack that Phase 11 v3 builds on top of):
+- **ROCm Optimized**: Built on AMD's ROCm platform with [AITER](https://github.com/ROCm/aiter) kernels (ASM, CK, Triton)
+- **OpenAI-Compatible API**: Drop-in server with `/v1/chat/completions` and `/v1/completions` endpoints
+- **Piecewise torch.compile**: 4 compilation levels with CUDA graph capture for low-latency decode
+- **Multi-GPU Parallelism**: Tensor parallelism (TP), data parallelism (DP), and expert parallelism (EP) with MORI all-to-all
+- **Quantization**: FP8, MXFP4, INT8, INT4 with auto-detection from HuggingFace configs
+- **Speculative Decoding**: Multi-Token Prediction (MTP) with EAGLE proposer
+- **Prefix Caching**: xxhash64-based KV cache block sharing across sequences
 
-| Metric | A27 baseline @ CONC=32 | Gate | Status |
-|---|---:|---:|:---:|
-| GSM8K (single run) | **0.9431** | ≥ 0.93 | ✅ PASS |
-| **Interactivity (tok/s/user)** | **56.17** | ≥ 50 | ✅ PASS (+12% margin) |
-| Median E2E latency | 19044 ms | ≤ 18000 | ❌ FAIL (−5.8%) |
-| Throughput per GPU | 3831 | ≥ 3900 | ❌ FAIL (−1.8%) |
-| TPOT median | 17.80 ms | — | — |
-| **Gates** | **2/4** | | |
+### Supported Models
 
-*Same stack as Apr 30 CONC=4 minus the Phase 11 v3 sampler kernel; Phase 11 v3 is concurrency-agnostic and would likely improve CONC=32 too, but we did not explicitly re-bench CONC=32 after Apr 30. **At CONC=32 the missing gates are within striking distance (E2E −5.8%, Tput −1.8%)**, suggesting CONC=32 4/4 may actually be reachable before CONC=4 4/4 as further levers stack.*
+| Model Family | HF Architecture | Dense/MoE | Notes |
+|---|---|---|---|
+| [Llama](https://huggingface.co/meta-llama) | `LlamaForCausalLM` | Dense | Llama 2, Llama 3, Llama 3.1 |
+| [Qwen3](https://huggingface.co/Qwen) | `Qwen3ForCausalLM` | Dense | |
+| [Qwen3-MoE](https://huggingface.co/Qwen) | `Qwen3MoeForCausalLM` | MoE | 128 experts, top-8 routing |
+| [Qwen3-Next](https://huggingface.co/Qwen) | `Qwen3NextForCausalLM` | MoE | Hybrid full attention + Gated DeltaNet |
+| [DeepSeek V2/V3](https://huggingface.co/deepseek-ai) | `DeepseekV3ForCausalLM` | MoE | MLA attention, MTP speculative decoding |
+| [Mixtral](https://huggingface.co/mistralai/Mixtral-8x7B-v0.1) | `MixtralForCausalLM` | MoE | 8 experts, top-2 routing |
+| [GLM-4-MoE](https://huggingface.co/THUDM) | `Glm4MoeForCausalLM` | MoE | |
+| [GLM-5](https://huggingface.co/zai-org/GLM-5-FP8) | `GlmMoeDsaForCausalLM` | MoE | MLA attention, similar to DeepSeek V3.2. See [recipe](recipes/GLM-5.md) |
+| [GPT-OSS](https://huggingface.co/openai) | `GptOssForCausalLM` | MoE | Sliding window + attention sinks |
+| [Kimi-K2](https://huggingface.co/moonshotai/Kimi-K2-Thinking) | via `--trust-remote-code` | MoE | See [recipe](recipes/Kimi-K2-Thinking.md) |
 
-**Headline lever**: port of TRT-LLM's `use_relaxed_acceptance_for_thinking: true` (with `relaxed_topk=10`, `relaxed_delta=0.6` — TRT-LLM's published values) to ATOM/AITER for DeepSeek-R1 on MI355X. Per-phase Triton sampler tracks each sequence's `<think>...</think>` reasoning phase on a GPU-resident `int8[max_num_seqs]` tensor and applies relaxed acceptance **only inside thinking**, never stricter than the baseline elsewhere.
+## 📋 Requirements
 
----
+- AMD GPU with ROCm support
+- Docker
 
-## Repository layout (this submission)
+## 🛠️ Installation
 
-The repo is organized in three tiers, **TPOT-reduction first** (the headline win), then **supporting engineering** (kernel deliverables that didn't make it into the production hot path but are real engineering work), then **investigation log** (DEAD-lever reference for AMD so they don't re-test).
+### Option A: Nightly Image (Recommended)
 
-```
-AMD_DSR_CNCC4/
-│
-├── PR_DESCRIPTION.md                          ← AMD submission item 2 (PR description)
-├── TECHNICAL_APPROACH.md                      ← AMD submission item 5 (technical approach)
-├── README.md                                  ← this file
-│
-├── ─────────── TIER 1: THE TPOT-REDUCING WIN ───────────
-│
-├── ATOM_main/                                 ← ATOM source with Phase 11 v3 patches applied
-│   └── atom/
-│       ├── model_engine/model_runner.py       (spec_phase tensor allocation + reset)
-│       ├── model_ops/rejection_sampler.py     (rejection_phased_sample_kernel + dispatcher)
-│       ├── utils/block_convert.py             (Phase 1 keystone: cudagraph-safe Triton grid)
-│       └── utils/envs.py                      (ATOM_ENABLE_PER_PHASE_RELAXED_MTP env flag)
-├── patches/scripts/
-│   ├── phase11_per_phase_mtp/                 (v1/v2/v3 patch iteration trail — THE WIN)
-│   │   ├── v3_top8_outside_thinking_fix.py    ← the KEEP / 2/4-gates patch
-│   │   ├── v1_initial.py / v2_triton_type_fix.py
-│   │   └── v3_1_per_pos_DEAD.py / v3_1b_top_n_12_DEAD.py (variants ruled out)
-│   └── phase1_l0_cudagraph_mode_patch.py      (L0-v2 FULL_DECODE_ONLY env-flag patch)
-├── bench_results/
-│   ├── apr30_phase11_per_phase_mtp_v3_KEEP_2of4/  ⭐ HEADLINE EVIDENCE PACK
-│   ├── apr29_l0v2_full_decode_only_WIN/           (L0-v2 supporting lever)
-│   ├── apr26/                                     (multi-CONC reference data)
-│   └── may01_phase0_clean_baseline/               (Phase 0 anchor)
-│
-├── ─────────── TIER 2: KERNEL ENGINEERING (supporting) ───────────
-│
-├── kernel_work/                               ← Built kernel deliverables NOT in production hot path
-│   ├── README.md                              (summary table — status of each)
-│   ├── phase2_fp4t_fused_ar_BUILT_DORMANT/         (aiter fused AR+RMSNorm+FP4 quant kernel — built, dormant)
-│   ├── r2_small_m_moe_BUILT_NEVER_INTEGRATED/      (CDNA4 hand-authored FP4 MoE GEMM2, BIT-EXACT, 23× microbench)
-│   └── l3_triton_fp4_kv_decode_3X_STANDALONE_INTEGRATION_REGRESS/  (Triton FP4 KV kernel, 3.04× faster standalone)
-│
-├── ─────────── TIER 3: INVESTIGATION LOG (for AMD reference) ───────────
-│
-├── investigation/                             ← Compact reference of DEAD levers (so AMD doesn't re-test)
-│   ├── README.md                              (≈30-row table of what was tried and ruled out)
-│   └── dead_levers_for_reference/             (preserved patch scripts for representative DEADs)
-│
-├── ─────────── Documentation + repro infra ───────────
-│
-├── docs/Daily Updates/
-│   ├── MASTER.md                              (full engineering log + bench history)
-│   ├── REPRODUCE.md                           (canonical reproduction recipe)
-│   ├── OFFICIAL_HARNESS.md                    (kimbochen harness contract)
-│   ├── Plan.md                                (master execution plan)
-│   └── SERVER.md                              (launch-script variants)
-├── scripts/                                   (boot scripts for TP=4/TP=8, multi-CONC)
-├── agents/                                    (paired-bench harness + N=3 official wrappers)
-└── aiter_configs/                             (hand-tuned FlyDSL + hipBLASLt CSVs needed for repro)
-```
-
-**Priority ordering**: AMD reviewers should focus on **Tier 1** for the verified 2/4-gates result. **Tier 2** is supporting engineering — kernels that built cleanly but didn't enter production for reasons documented in each subdir's README. **Tier 3** is "what was tried and ruled out" — kept compact so reviewers can verify scope without re-running experiments.
-
----
-
-## Quick reproduction
-
-Full step-by-step recipe in [`docs/Daily Updates/REPRODUCE.md`](docs/Daily%20Updates/REPRODUCE.md).
+Pre-built image with AITER + ATOM ready to use:
 
 ```bash
-# 1) Pull canonical snapshot
-docker pull rocm/atom-dev:dsr1_apr30_phase11_v3_2of4
-docker run -d --name dsr1_repro \
-  --ipc=host --shm-size=32g --network=host \
-  --device=/dev/kfd --device=/dev/dri \
-  -v /docker/huggingface/:/tmp/.cache/huggingface \
-  -e HIP_VISIBLE_DEVICES=0,1,2,3 \
-  rocm/atom-dev:dsr1_apr30_phase11_v3_2of4 sleep infinity
+docker pull rocm/atom-dev:latest
 
-# 2) Reset perf-determinism (required for SCLK 2396 MHz boost)
-docker exec dsr1_repro rocm-smi --resetperfdeterminism -d 0 -d 1 -d 2 -d 3
-
-# 3) Boot with the lever enabled (ATOM_ENABLE_PER_PHASE_RELAXED_MTP=1)
-docker exec -d dsr1_repro bash /tmp/boot_phase11_per_phase_mtp.sh
-# Wait ~13 min for cudagraph capture; tail /tmp/*.log for "Application startup complete"
-
-# 4) Warmup with 8 small curls (CRITICAL — hits decode cudagraph batches [1,2,4,8])
-docker exec dsr1_repro bash -c '
-for i in 1 2 3 4 5 6 7 8; do
-  curl -s http://0.0.0.0:8890/v1/completions \
-    -H "Content-Type: application/json" \
-    -d "{\"model\":\"amd/DeepSeek-R1-0528-MXFP4\",\"prompt\":\"Hello world '"$i"'\",\"max_tokens\":50,\"temperature\":0}" > /dev/null
-done && echo warmup_done'
-
-# 5) Official kimbochen 4-iter bench; take median(iter2, iter3, iter4)
-docker exec dsr1_repro bash /tmp/dsr1_benchmark_4iter.sh
-
-# 6) GSM8K N=3 (separate eval; median >= 0.93)
-docker exec dsr1_repro bash /tmp/run_gsm8k_n3.sh
+docker run -it --network=host \
+  --device=/dev/kfd \
+  --device=/dev/dri \
+  --group-add video \
+  --cap-add=SYS_PTRACE \
+  --security-opt seccomp=unconfined \
+  -v $HOME:/home/$USER \
+  -v /mnt:/mnt \
+  -v /data:/data \
+  --shm-size=16G \
+  --ulimit memlock=-1 \
+  --ulimit stack=67108864 \
+  rocm/atom-dev:latest
 ```
 
-**Expected**: TPOT_med 5.641 ms ± 0.05, Tput/GPU 1449 ± 20, GSM8K_med 0.9318 ± 0.005, Interactivity 177.26, **2/4 gates**.
+### Option B: Build from Base ROCm Image
 
----
+#### 1. Pull and run the base image
 
-## What the lever does (mechanism)
+```bash
+docker pull rocm/pytorch:rocm7.0.2_ubuntu24.04_py3.12_pytorch_release_2.8.0
 
-DSR1-R1 emits explicit `<think>...</think>` reasoning blocks (token IDs `128798` open / `128799` close). These two phases have **different logit-distribution shapes**:
+docker run -it --network=host \
+  --device=/dev/kfd \
+  --device=/dev/dri \
+  --group-add video \
+  --cap-add=SYS_PTRACE \
+  --security-opt seccomp=unconfined \
+  -v $HOME:/home/$USER \
+  -v /mnt:/mnt \
+  -v /data:/data \
+  --shm-size=16G \
+  --ulimit memlock=-1 \
+  --ulimit stack=67108864 \
+  rocm/pytorch:rocm7.0.2_ubuntu24.04_py3.12_pytorch_release_2.8.0
+```
 
-| Phase | Logit shape | Optimal acceptance |
+#### 2. Install AITER and ATOM inside the container
+
+```bash
+pip install amd-aiter
+git clone https://github.com/ROCm/ATOM.git && pip install ./ATOM
+```
+
+## 💡 Usage
+
+### Basic Example
+
+Before running the example, please install ninja and the Hugging Face CLI, and log in to your account.
+```bash
+pip install ninja
+pip install -U "huggingface_hub"
+hf auth login
+```
+
+The default optimization level is 3 (piecewise torch.compile with CUDA graphs).
+
+```bash
+python -m atom.examples.simple_inference --model meta-llama/Meta-Llama-3-8B --kv_cache_dtype fp8
+```
+
+> **Note:** First-time execution may take approximately 10 minutes for model compilation.
+
+### Serving
+
+Start an OpenAI-compatible server:
+
+```bash
+# Single GPU
+python -m atom.entrypoints.openai_server --model Qwen/Qwen3-0.6B --kv_cache_dtype fp8
+
+# Multi-GPU with tensor parallelism
+python -m atom.entrypoints.openai_server --model deepseek-ai/DeepSeek-R1 --kv_cache_dtype fp8 -tp 8
+
+# With MTP speculative decoding
+python -m atom.entrypoints.openai_server --model deepseek-ai/DeepSeek-R1 --kv_cache_dtype fp8 -tp 8 \
+  --method mtp --num-speculative-tokens 3
+```
+
+## 📊 Performance
+
+### Live Benchmark Dashboard
+
+**[rocm.github.io/ATOM/benchmark-dashboard](https://rocm.github.io/ATOM/benchmark-dashboard/)**
+
+The dashboard tracks nightly performance across models and configurations:
+
+- **Interactive vs Throughput** — tok/s/user vs tok/s/gpu tradeoff across concurrency levels
+- **Throughput & Latency trends** — Output throughput, TTFT, TPOT over time, grouped by model
+- **Regression detection** — Automatic alerts when throughput drops >5% or latency increases >10%
+- **Profiler trace collection** — On regression, automatically re-runs with PyTorch profiler and uploads traces
+
+Models tracked: DeepSeek-R1-0528 (FP8 & MTP3), GLM-5-FP8, gpt-oss-120b
+
+### Online Serving Throughput
+
+![DS R1 Performance](./docs/assets/ds_r1_performance.png)
+
+For more information, visit [InferenceX](https://inferencex.semianalysis.com/).
+
+### Benchmarking
+
+Run an online throughput benchmark against a running server:
+
+```bash
+python -m atom.benchmarks.benchmark_serving \
+  --model=deepseek-ai/DeepSeek-R1 --backend=vllm --base-url=http://localhost:8000 \
+  --dataset-name=random \
+  --random-input-len=1024 --random-output-len=1024 \
+  --random-range-ratio=0.8 \
+  --num-prompts=1280 --max-concurrency=128 \
+  --request-rate=inf --ignore-eos \
+  --save-result --percentile-metrics="ttft,tpot,itl,e2el"
+```
+
+### Profiling & Trace Analysis
+
+#### Collect a Trace
+
+Launch the server with `--torch-profiler-dir` and `--mark-trace`:
+
+```bash
+python -m atom.entrypoints.openai_server \
+  --model deepseek-ai/DeepSeek-R1 --kv_cache_dtype fp8 -tp 8 \
+  --torch-profiler-dir ./trace --mark-trace
+```
+
+Collect traces via benchmark `--profile` flag (auto start/stop):
+
+```bash
+python -m atom.benchmarks.benchmark_serving \
+  --model=deepseek-ai/DeepSeek-R1 --backend=vllm --base-url=http://localhost:8000 \
+  --dataset-name=random --random-input-len=1024 --random-output-len=1024 \
+  --num-prompts=128 --max-concurrency=128 \
+  --request-rate=inf --ignore-eos --profile
+```
+
+Or control profiling manually on a running server:
+
+```bash
+curl -X POST http://127.0.0.1:8000/start_profile
+# ... run your workload ...
+curl -X POST http://127.0.0.1:8000/stop_profile
+```
+
+#### Analyze the Trace
+
+```bash
+# Kernel breakdown per layer → Excel
+python tools/parse_trace.py ./trace/rank_0/DeepSeek-R1_ts_*.json.gz --layer 3
+
+# Performance summary → Markdown report
+python tools/analyze_trace_summary.py ./trace/rank_0/DeepSeek-R1_ts_*.json.gz
+```
+
+| Output | Description |
+|---|---|
+| `prefill_breakdown.xlsx` | Per-kernel duration, call count, pct%, module grouping, cross-layer averages |
+| `decode_breakdown.xlsx` | Same for decode phase, with CUDAGraph kernel mapping |
+| `performance_summary.md` | Prefill/decode/draft step timing, iteration breakdown |
+
+### Accuracy Validation
+
+```bash
+pip install lm-eval[api]
+
+# Start server, then run evaluation
+lm_eval --model local-completions \
+  --model_args model=meta-llama/Meta-Llama-3-8B,base_url=http://localhost:8000/v1/completions,num_concurrent=64,max_retries=3,tokenized_requests=False \
+  --tasks gsm8k --num_fewshot 5
+```
+
+## 📚 Documentation
+
+**Full documentation: [rocm.github.io/ATOM/docs](https://rocm.github.io/ATOM/docs)**
+
+| Topic | Description | Guide |
 |---|---|---|
-| Inside `<think>` (reasoning) | wider, low-margin | top-N=10, δ=0.6 (TRT-LLM published) |
-| Outside thinking (final answer) | sharper, correctness-bound | top-N=8, δ=0.6 (= baseline) |
+| Architecture | System overview, request lifecycle, component design | [Architecture Guide](docs/architecture_guide.md) |
+| Configuration | Config classes, CLI arguments, environment variables | [Configuration Guide](docs/configuration_guide.md) |
+| Model Support | Supported models, weight loading, adding new architectures | [Model Support Guide](docs/model_support_guide.md) |
+| Model Operations | AITER kernel integration, linear/attention/MoE/norm wrappers | [Model Ops Guide](docs/model_ops_guide.md) |
+| Scheduling & KV Cache | Batch scheduling, block allocation, prefix caching | [Scheduling Guide](docs/scheduling_kv_cache_guide.md) |
+| Compilation | torch.compile levels, CUDA graphs, piecewise compilation | [Compilation Guide](docs/compilation_cudagraph_guide.md) |
+| Distributed | Tensor/data/expert parallelism, multi-GPU deployment | [Distributed Guide](docs/distributed_guide.md) |
+| Serving & Benchmarks | OpenAI API server, benchmarking, profiling, speculative decoding | [Serving Guide](docs/serving_benchmarking_guide.md) |
+| Environment Variables | All `ATOM_*` variable definitions | [Env Vars](docs/environment_variables.md) |
 
-ATOM's stock `RELAXED_TOP_N=8` is applied **globally**. Phase 11 v3 tracks each sequence's phase on a GPU `int8[max_num_seqs]` tensor and dispatches the wider top-10 acceptance **only inside thinking**, leaving answer-phase acceptance at the proven baseline. Net effect: never stricter than baseline anywhere → no GSM8K regression on the answer phase, but more accepted draft tokens during reasoning → fewer total decode forwards → lower TPOT.
+**Deployment Recipes:**
 
-The kernel is **cudagraph-safe**: the phase tensor lives at fixed GPU storage; the Triton kernel uses only `tl.load`/`tl.store`; no Python `setattr` in the forward path. Captured cleanly under `ATOM_CUDAGRAPH_MODE=FULL_DECODE_ONLY` for batch sizes `[1, 2, 4, 8, 16, 32]`.
+- [DeepSeek-R1](recipes/DeepSeek-R1.md) — FP8/MXFP4 with MTP speculative decoding on 8 GPUs
+- [Qwen3-235B-A22B](recipes/Qwen3-235b.md) — TP8 + EP with FP8 KV cache
+- [Qwen3-Next](recipes/Qwen3-Next.md) — Hybrid GDN + MoE architecture
+- [Kimi-K2-Thinking](recipes/Kimi-K2-Thinking.md) — MXFP4 MoE on 4 GPUs
+- [GLM-5](recipes/GLM-5.md) — FP8 MoE with MLA on 8 GPUs
+- [GPT-OSS-120B](recipes/GPT-OSS.md) — Single GPU or DP+EP on 2 GPUs
 
-### Why v3 succeeded where v1 and v2 didn't
+**Framework Integration:**
 
-| Variant | Outside-thinking top-N | Result | Issue |
-|---|---:|---|---|
-| v1 | int8/int32 type mismatch | Triton crash | Fixed by explicit cast in kernel |
-| v2 | top-N=1 (strict greedy) | +0.86 ms regress | Stricter than baseline → accept-rate fell |
-| **v3** | **top-N=8 (= baseline)** | **−0.661 ms WIN** | Matches baseline outside thinking, only relaxes inside |
+- [vLLM Plugin Backend](docs/vllm_plugin_backend_guide.md) — ATOM as the out-of-tree plugin backend for vLLM
 
----
+## Acknowledgements
 
-## How to enable / disable
+This project was adapted from [nano-vllm](https://github.com/GeeeekExplorer/nano-vllm).
 
-```bash
-# Default (this PR is dormant — bit-identical to stock ATOM):
-unset ATOM_ENABLE_PER_PHASE_RELAXED_MTP
+## Support & Reporting Issues
 
-# Activated (the 2/4-gates configuration):
-export ATOM_ENABLE_PER_PHASE_RELAXED_MTP=1
-```
-
-Also requires `ATOM_CUDAGRAPH_MODE=FULL_DECODE_ONLY` (L0-v2 lever) and stock `ATOM_ENABLE_RELAXED_MTP=1` (both pre-existing flags). Full env-flag stack documented in [`docs/Daily Updates/SERVER.md`](docs/Daily%20Updates/SERVER.md).
-
----
-
-## Files changed vs upstream
-
-All changes are env-gated; default behavior (env unset) is bit-identical to upstream.
-
-| File | Change |
-|---|---|
-| `ATOM_main/atom/utils/envs.py` | Add `ATOM_ENABLE_PER_PHASE_RELAXED_MTP` (default `0`) |
-| `ATOM_main/atom/model_engine/model_runner.py` | Allocate `self.spec_phase = torch.zeros(max_num_seqs, int8, cuda)`; register on rejection_sampler module; reset prefill-slot phases on new request (Python-side, outside captured graph) |
-| `ATOM_main/atom/model_ops/rejection_sampler.py` | Module-level `_spec_phase_tensor` + `set_spec_phase_tensor()` setter. New `rejection_phased_sample_kernel` Triton kernel: dual top-N branches (8/10), per-sequence phase lookup, commit-token scan for `<think>`/`</think>` IDs. Env-gated dispatch. |
-| `ATOM_main/atom/utils/block_convert.py:142-215` | Cudagraph-safe Triton grid: `cdiv(n_cols, blocks_per_tile)` instead of `cdiv(max_num_blocks, blocks_per_tile)`. Phase 1 keystone (neutral perf, unblocks downstream). |
-
-**Total LOC delta**: ~210 lines added, ~30 modified. No upstream files renamed or removed.
-
----
-
-## Cumulative TPOT progress (chronological)
-
-```
-Start (vanilla TP=8 MTP=3 fp8 KV):                  ~7.88 ms  (1/4 gates)
-       |
-+ TP=8 -> TP=4 SR config                             7.88 ms
-       |
-+ ATOM_ENABLE_RELAXED_MTP=1 (stock flag, was OFF)    5.59 ms  <- -2.29 ms
-       |
-+ VLLM_ROCM_QUICK_REDUCE_QUANTIZATION=INT4           5.59 ms  (Tput +6.8%)
-       |
-+ RCCL_MSCCLPP knobs                                 5.93 ms  <- -0.18 ms
-       |
-+ rocm-smi --resetperfdeterminism (SCLK boost)       5.85 ms
-       |
-+ --cudagraph-capture-sizes [1,2,4,8,16,32]          4.84 ms  <- -1.41 ms (warm, single biggest unlock)
-       |
-+ ATOM_CUDAGRAPH_MODE=FULL_DECODE_ONLY               5.94 ms  <- (on later official harness baseline)
-       |
-+ Phase 11 v3 (TRT-LLM thinking port)                5.641 ms <- -0.661 ms ⭐ this PR's win
-       |
-2/4 gates achieved (GSM + Interactivity)
-```
-
-**Net official-harness TPOT progress: 7.88 → 5.641 ms (−2.24 ms, −28%) over 5 weeks.**
-
----
-
-## Documentation map
-
-| Document | Purpose |
-|---|---|
-| [`PR_DESCRIPTION.md`](PR_DESCRIPTION.md) | AMD submission **item 2** — pull-request description with file-by-file changes |
-| [`TECHNICAL_APPROACH.md`](TECHNICAL_APPROACH.md) | AMD submission **item 5** — full technical approach: profiling methodology, bottleneck attribution, decision tree, lever inventory, architectural ceiling |
-| [`docs/Daily Updates/MASTER.md`](docs/Daily%20Updates/MASTER.md) | Full engineering log (Apr 10 → May 04) with bench history and findings |
-| [`docs/Daily Updates/REPRODUCE.md`](docs/Daily%20Updates/REPRODUCE.md) | Canonical step-by-step reproduction recipe |
-| [`docs/Daily Updates/OFFICIAL_HARNESS.md`](docs/Daily%20Updates/OFFICIAL_HARNESS.md) | Kimbochen harness contract and measurement discipline |
-| [`docs/Daily Updates/Plan.md`](docs/Daily%20Updates/Plan.md) | Master execution plan |
-| [`docs/Daily Updates/SERVER.md`](docs/Daily%20Updates/SERVER.md) | Launch-script variants |
-| [`bench_results/apr30_phase11_per_phase_mtp_v3_KEEP_2of4/README.md`](bench_results/apr30_phase11_per_phase_mtp_v3_KEEP_2of4/) | Headline evidence pack — kimbochen JSON + GSM8K log + boot log |
-
----
-
-## Stack
-
-- **Base image**: `rocm/atom-dev:dsr1_session17_re1_best_3of4_apr23_0627` (sha `2286b9de5107`)
-- **ROCm**: 7.2.2 / HIP runtime + LLVM 21
-- **PyTorch**: 2.10.0+rocm7.2.2.git40d237bf
-- **aiter**: HEAD on this branch (with Phase 2 fp4_t fused AR+RMSNorm+quant kernel built — see [`PR_DESCRIPTION.md`](PR_DESCRIPTION.md) §"What's also in this branch")
-- **ATOM**: HEAD on this branch (with Phase 11 v3 patches)
-- **flydsl**: 0.1.3.1
-- **triton**: 3.5.1
-- **Model**: `amd/DeepSeek-R1-0528-MXFP4` (HF cached at `/tmp/.cache/huggingface/hub`)
-- **Hardware**: 4× AMD Instinct MI355X (gfx950, CDNA4) per TP=4 run
-
----
-
-## Acknowledgments
-
-- **TRT-LLM team** for publishing `use_relaxed_acceptance_for_thinking` + values `relaxed_topk=10` / `relaxed_delta=0.6` — the design referenced by Phase 11 v3.
-- **AMD AITER team** for the FlyDSL FP4 MoE GEMM fast-path, the persistent MLA kernel infrastructure, and the QuickReduce INT4 codec.
-- **AMD ATOM team** for the `RELAXED_MTP` infrastructure and the `FULL_DECODE_ONLY` cudagraph mode.
-
----
-
-## Contact
-
-- Author: Danish Lynx (`danishlynx@gmail.com`)
-- Repository: `Danishlynx/AMD_DSR_CNCC4`
-- Submission target: `ai_dev_contests@amd.com`
+We welcome issues and contributions! Please use the GitHub Issues page to report bugs or request features: https://github.com/ROCm/ATOM/issues
