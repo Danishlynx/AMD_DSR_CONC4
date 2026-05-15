@@ -49,6 +49,42 @@ Evidence: [`docs/Daily Updates/MASTER.md`](docs/Daily%20Updates/MASTER.md) §"A2
 
 ---
 
+## Cumulative TPOT-reduction trajectory (full campaign)
+
+The 5.641 ms TPOT figure is the **end state** of a stack of levers applied over 5 weeks. Phase 11 v3 (this PR's headline) is the **largest single first-party source-level contribution** but not the only lever. Each contribution:
+
+| # | Lever | Type | TPOT Δ | Cumulative | Notes |
+|---|---|---|---:|---:|---|
+| 0 | Vanilla baseline (TP=8 MTP=3 fp8 KV) | — | — | ~7.88 ms (TP=4) | starting point |
+| 1 | TP=8 → TP=4 single-replica | config | — | 7.88 ms | required for CONC=4 |
+| 2 | **`ATOM_ENABLE_RELAXED_MTP=1` + `RELAXED_TOP_N=8` + `DELTA=0.5`** (stock ATOM flag — was OFF by default) | env flag | **−2.29 ms** | 5.59 ms | enable stock spec-decode relaxation |
+| 3 | `VLLM_ROCM_QUICK_REDUCE_QUANTIZATION=INT4` (QuickReduce AR) | env flag | minimal TPOT | 5.59 ms | +6.8% throughput |
+| 4 | RCCL_MSCCLPP knobs (ROCm 7.1+): `RCCL_MSCCLPP_ENABLE`, `_THRESHOLD`, `RCCL_P2P_BATCH_ENABLE` | env flags | **−0.18 ms** | 5.41 ms | in-network AllReduce on small messages |
+| 5 | `rocm-smi --resetperfdeterminism` (SCLK 2100 → 2396 MHz boost) | platform | **−0.08 ms** | 5.33 ms | required cold-boot step |
+| 6 | **`--cudagraph-capture-sizes [1,2,4,8,16,32]`** | CLI flag | **−1.41 ms** | **4.84 ms** *(warm, Apr 26 informal-bench)* | **single biggest unlock** — pruned 27 unused graph variants from the default capture set |
+| 7 | 8-curl warmup pattern (vs 5 large prompts) | bench discipline | absorbed into #6 | 4.84 ms | hits all decode cudagraph batches `[1,2,4,8]` |
+| 8 | `RELAXED_TOP_N` 8 → 9 | sampler | small (within #6) | 4.84 ms | |
+| 9 | `ATOM_MSCG_K` unset (was 2 — silent regression removed) | config | **−0.05 ms** | 4.84 ms | |
+| — | **Apr 27: official-harness re-baseline under N=3** | — | — | **6.171 ms** | informal-bench numbers downgraded under the kimbochen N=3 harness; "A27 baseline" locked here |
+| 10 | `ATOM_CUDAGRAPH_MODE=FULL_DECODE_ONLY` (L0-v2) | env flag | **−0.166 ms** | 6.005 ms | sidesteps `FULL_AND_PIECEWISE` dual-stream MoE conflict |
+| 11 | **Phase 11 v3 — TRT-LLM thinking port** ⭐ *(this PR)* | **first-party Triton kernel + plumbing** | **−0.661 ms** | **5.641 ms** | **−1 gate → +1 gate, 1/4 → 2/4** |
+
+### Summary by category
+
+| Category | Δ TPOT contribution | Levers |
+|---|---:|---|
+| Stock ATOM env flags (were OFF by default) | **−2.29 ms** | `ATOM_ENABLE_RELAXED_MTP` (#2) |
+| CLI / cudagraph configuration | **−1.58 ms** | `--cudagraph-capture-sizes` (#6) + `FULL_DECODE_ONLY` (#10) |
+| **First-party source-level kernel + plumbing (this PR)** | **−0.661 ms** | **Phase 11 v3 (#11)** |
+| Comm + platform knobs | −0.26 ms | RCCL_MSCCLPP (#4) + perf-determinism (#5) + MSCG_K unset (#9) |
+| **Net** | **−2.24 ms / −28%** | over 5 weeks |
+
+**What this PR actually adds vs upstream ATOM**: the **−0.661 ms** from the Phase 11 v3 Triton kernel + dispatcher + env-flag plumbing. The other levers in the trajectory are either pre-existing flags that AMD/ATOM ship (just need to be turned ON) or CLI configurations — those are documented in [`docs/Daily Updates/SERVER.md`](docs/Daily%20Updates/SERVER.md) for reproducibility, but they aren't source changes in this PR.
+
+> **Why this distinction matters**: AMD reviewers shouldn't think the 2/4 gates require only the Phase 11 v3 kernel change — they require the full stack (env flags + CLI configs + Phase 11 v3 + the harness/warmup discipline). The Phase 11 v3 kernel **adds** −0.661 ms **on top of** that stack and **crosses Interactivity from 158.68 (FAIL) → 177.26 (PASS)**, which is the +1 gate this PR delivers.
+
+---
+
 ## What the lever does (mechanism)
 
 DSR1-R1 emits explicit reasoning blocks delimited by `<think>...</think>` tokens (IDs `128798` open / `128799` close). These two phases have **different logit-distribution shapes** and benefit from **different speculative-decode acceptance criteria**:
