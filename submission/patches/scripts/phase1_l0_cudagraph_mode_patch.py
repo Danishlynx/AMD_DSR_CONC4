@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Phase 1 L0 patch — env-gated cudagraph_mode wiring in atom EngineArgs.
+Phase 1 L0 patch -- env-gated cudagraph_mode wiring in atom EngineArgs.
 
 Discovery during Phase 1: L1 (compile_sizes) is ALREADY shipped via env var
 ATOM_COMPILE_SIZES (a prior session's wire-up at lines 242-244 of
@@ -13,9 +13,9 @@ and inject into CompilationConfig.cudagraph_mode kwarg.
 
 Lever L0: cudagraph_mode = "FULL_AND_PIECEWISE"
    docs/compilation_cudagraph_guide.md:100-114 calls this "the most performant
-   mode for most models" — eliminates per-step kernel-launch overhead at decode
-   by capturing the full decode forward in one cudagraph (60 layers × ~10 µs
-   = 600 µs/step), while preserving piecewise capture for prefill.
+   mode for most models" -- eliminates per-step kernel-launch overhead at decode
+   by capturing the full decode forward in one cudagraph (60 layers x ~10 us
+   = 600 us/step), while preserving piecewise capture for prefill.
 
 Mergeability: env-gated, default OFF (preserves current behavior), validates
 input against the upstream CUDAGraphMode enum. Maps cleanly to a single PR.
@@ -23,7 +23,7 @@ input against the upstream CUDAGraphMode enum. Maps cleanly to a single PR.
 Apply via:
     python3 phase1_l0_cudagraph_mode_patch.py /app/ATOM/atom/model_engine/arg_utils.py
 
-Idempotent — re-running detects PATCH_MARKER and skips.
+Idempotent -- re-running detects PATCH_MARKER and skips.
 """
 
 import argparse
@@ -47,7 +47,7 @@ def patch_file(path: Path) -> int:
         shutil.copy2(path, backup)
         print(f"[backup] {backup}")
 
-    # ── Locate the existing ATOM_COMPILE_SIZES wiring; insert L0 right after it.
+    # -- Locate the existing ATOM_COMPILE_SIZES wiring; insert L0 right after it.
     #
     # Existing lines (per phase 0 inspection of live file):
     #     import os as _os_l3
@@ -91,7 +91,7 @@ def patch_file(path: Path) -> int:
 
     indent = m.group(2)
 
-    # ── Inject L0 cudagraph_mode env-read block BEFORE the CompilationConfig call,
+    # -- Inject L0 cudagraph_mode env-read block BEFORE the CompilationConfig call,
     # then add a closing-paren-replacement that includes cudagraph_mode= kwarg.
 
     # Strategy: find the CompilationConfig block end and inject the cudagraph_mode
@@ -127,7 +127,7 @@ def patch_file(path: Path) -> int:
         f'{indent}if _os_l3.getenv("ATOM_COMPILE_SIZES", "").lower() == "cudagraph_capture_sizes":\n'
         f'{indent}    _l3_compile_sizes = ["cudagraph_capture_sizes"]\n'
         f'{indent}{PATCH_MARKER}\n'
-        f'{indent}# L0 — env-gated cudagraph_mode override (FULL_AND_PIECEWISE recommended\n'
+        f'{indent}# L0 -- env-gated cudagraph_mode override (FULL_AND_PIECEWISE recommended\n'
         f'{indent}# for DSR1-class MoE per docs/compilation_cudagraph_guide.md L100-114).\n'
         f'{indent}_l0_cudagraph_mode = None\n'
         f'{indent}_l0_mode_env = _os_l3.getenv("ATOM_CUDAGRAPH_MODE", "").upper()\n'

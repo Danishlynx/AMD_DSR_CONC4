@@ -10,7 +10,7 @@
 
 ## Measurement-regime separation (read this first)
 
-This campaign used **two different measurement regimes**. Per-lever deltaTPOT values from the two regimes are NOT directly comparable.
+This campaign used **two different measurement regimes**. Per-lever TPOT delta values from the two regimes are NOT directly comparable.
 
 | Era | Bench | Parameters | Authoritative? |
 |---|---|---|:---:|
@@ -19,7 +19,7 @@ This campaign used **two different measurement regimes**. Per-lever deltaTPOT va
 
 The Apr 26 informal bench measured "TPOT 4.84 ms / 3/4 gates" on the locked stack. The **same stack** re-measured Apr 27 under the official kimbochen N=3 harness measured **TPOT 6.171 ms / 1/4 gates** ("A27 baseline"). The informal numbers were partly mirage from the looser bench parameters.
 
-**The authoritative final TPOT (5.641 ms) and the per-lever deltaTPOT values for L0-v2 and Phase 11 v3 below are all from the official kimbochen N=3 harness.**
+**The authoritative final TPOT (5.641 ms) and the per-lever TPOT delta values for L0-v2 and Phase 11 v3 below are all from the official kimbochen N=3 harness.**
 
 ---
 
@@ -28,7 +28,7 @@ The Apr 26 informal bench measured "TPOT 4.84 ms / 3/4 gates" on the locked stac
 | Metric | Value | Gate | Status |
 |---|---:|---:|:---:|
 | **GSM8K (N=3 median)** | **0.9318** | >= 0.93 | **PASS** (margin +0.0018) |
-| Median TPOT | **5.641 ms** | -- | (drives Interactivity ^, E2E v) |
+| Median TPOT | **5.641 ms** | -- | (drives Interactivity up, E2E down) |
 | **Throughput per GPU** | **1449 tok/s** | >= 1500 | FAIL (off by 51 = -3.4%) |
 | **Interactivity (tok/s/user)** | **177.26** | >= 165 | **PASS** (margin +12 = +7%) |
 | Median E2E latency | **6210 ms** | <= 5000 | FAIL (off by 1210 = +24%) |
@@ -71,7 +71,7 @@ CONC=32 failing gates miss by only 5.8% (E2E) and 1.8% (Tput), suggesting CONC=3
 | # | Lever | Type | TPOT before | TPOT after | TPOT delta | Measured |
 |---|---|---|---:|---:|---:|---|
 | 1 | `ATOM_CUDAGRAPH_MODE=FULL_DECODE_ONLY` (L0-v2) | env flag | 6.106 ms | 5.940 ms | **-0.166 ms** | Apr 29 |
-| 2 | **Phase 11 v3 -- TRT-LLM thinking port** *(this PR)* [KEY] | **first-party Triton kernel + plumbing** | 6.302 ms | **5.641 ms** | **-0.661 ms** | Apr 30 |
+| 2 | **Phase 11 v3 -- TRT-LLM thinking port** *(this PR)* | **first-party Triton kernel + plumbing** | 6.302 ms | **5.641 ms** | **-0.661 ms** | Apr 30 |
 
 Baselines differ across days (6.106 vs 6.302) due to +/-0.25 ms cross-boot noise. Both deltas were validated on their own day's baseline.
 
@@ -81,7 +81,7 @@ Baselines differ across days (6.106 vs 6.302) due to +/-0.25 ms cross-boot noise
 
 ## Historical context: informal-bench era levers (NOT authoritative)
 
-Apr 14-26: these env flags / CLI configs were turned ON during the informal-bench era of the campaign. Per-lever deltaTPOTs below are from the informal bench at the time and **are NOT directly comparable to the official kimbochen N=3 numbers above**.
+Apr 14-26: these env flags / CLI configs were turned ON during the informal-bench era of the campaign. Per-lever TPOT deltas below are from the informal bench at the time and **are NOT directly comparable to the official kimbochen N=3 numbers above**.
 
 | Lever | Type | Informal-bench delta |
 |---|---|---:|
@@ -96,7 +96,7 @@ Apr 14-26: these env flags / CLI configs were turned ON during the informal-benc
 
 **These levers ARE part of the production stack** that achieves the 5.641 ms TPOT -- the boot script enables them all. But:
 
-- Their per-lever deltaTPOTs were measured under the informal bench (different `--random-range-ratio`, fewer warmups, different harness mechanics)
+- Their per-lever TPOT deltas were measured under the informal bench (different `--random-range-ratio`, fewer warmups, different harness mechanics)
 - When the full informal-bench-era stack was re-measured Apr 27 under the official kimbochen N=3 harness, the result was **TPOT 6.171 ms ("A27 baseline")**, NOT the 4.84 ms the informal bench had reported
 - So while the levers DO contribute (the production stack measures 6.171 -> 5.641 vs a no-flags vanilla baseline that would be much higher), **the historical -2.29 / -1.41 / etc. numbers should be treated as informal-bench artifacts, not authoritative under the canonical harness**
 

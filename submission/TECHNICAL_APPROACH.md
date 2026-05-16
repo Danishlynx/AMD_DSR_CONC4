@@ -10,7 +10,7 @@
 
 ## 1. Measurement discipline (read this first)
 
-Two different measurement regimes were used during the campaign. The per-lever deltaTPOT numbers below are explicitly tagged with which regime produced them -- they are **NOT** directly comparable across regimes.
+Two different measurement regimes were used during the campaign. The per-lever TPOT delta numbers below are explicitly tagged with which regime produced them -- they are **NOT** directly comparable across regimes.
 
 | Era | Bench | Parameters | Authoritative? |
 |---|---|---|:---:|
@@ -19,7 +19,7 @@ Two different measurement regimes were used during the campaign. The per-lever d
 
 The Apr 26 informal bench measured "TPOT 4.84 ms / 3/4 gates" on the locked stack. The same stack re-measured Apr 27 under the official kimbochen N=3 harness measured **TPOT 6.171 ms / 1/4 gates** ("A27 baseline"). The informal numbers were partly mirage from the looser bench parameters (different `--random-range-ratio`, fewer warmups).
 
-**Going forward in this document, all authoritative deltaTPOT claims are from the official kimbochen N=3 harness, measured Apr 27 onward.**
+**Going forward in this document, all authoritative TPOT delta claims are from the official kimbochen N=3 harness, measured Apr 27 onward.**
 
 Three measurement traps were also discovered during the campaign and corrected:
 
@@ -117,7 +117,7 @@ Two levers were validated under the canonical harness; **both ship in this submi
 | # | Lever | Type | TPOT before | TPOT after | delta | Measured |
 |---|---|---|---:|---:|---:|---|
 | 1 | `ATOM_CUDAGRAPH_MODE=FULL_DECODE_ONLY` (L0-v2) | env flag | 6.106 ms | 5.940 ms | **-0.166 ms** | Apr 29 |
-| 2 | **Phase 11 v3 -- TRT-LLM thinking port** *(this PR)* [KEY] | **first-party Triton kernel** | 6.302 ms | **5.641 ms** | **-0.661 ms** | Apr 30 |
+| 2 | **Phase 11 v3 -- TRT-LLM thinking port** *(this PR)* | **first-party Triton kernel** | 6.302 ms | **5.641 ms** | **-0.661 ms** | Apr 30 |
 
 Baselines differ across days (6.106 vs 6.302) due to +/-0.25 ms cross-boot noise. Both deltas were validated against their own day's same-server baseline.
 
@@ -127,7 +127,7 @@ Baselines differ across days (6.106 vs 6.302) due to +/-0.25 ms cross-boot noise
 
 ## 7. Informal-bench era levers (context, NOT authoritative)
 
-Apr 14-26: these env flags / CLI configs were turned ON during the informal-bench era of the campaign and **ARE part of the production stack** (the boot script enables them all). However, their **per-lever deltaTPOT numbers from that era are NOT authoritative under the canonical harness**:
+Apr 14-26: these env flags / CLI configs were turned ON during the informal-bench era of the campaign and **ARE part of the production stack** (the boot script enables them all). However, their **per-lever TPOT delta numbers from that era are NOT authoritative under the canonical harness**:
 
 | Lever | Type | Informal-bench delta |
 |---|---|---:|
@@ -139,7 +139,7 @@ Apr 14-26: these env flags / CLI configs were turned ON during the informal-benc
 | 8-curl warmup pattern | bench discipline | absorbed |
 | `ATOM_MSCG_K` unset | config | (historical -0.05 ms) |
 
-When the full informal-bench-era stack was re-measured Apr 27 under the official kimbochen N=3 harness, the result was **TPOT 6.171 ms (A27 baseline)**, not the 4.84 ms the informal bench had reported. **The historical deltaTPOT figures above are informal-bench artifacts**, not authoritative under the canonical harness.
+When the full informal-bench-era stack was re-measured Apr 27 under the official kimbochen N=3 harness, the result was **TPOT 6.171 ms (A27 baseline)**, not the 4.84 ms the informal bench had reported. **The historical TPOT delta figures above are informal-bench artifacts**, not authoritative under the canonical harness.
 
 The honest framing: these levers contribute to the production stack (the boot script turns them all ON), but the only TPOT reductions independently validated under the canonical kimbochen N=3 harness in this campaign are the two listed in sect 6.
 
