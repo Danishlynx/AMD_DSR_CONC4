@@ -899,6 +899,24 @@ class ModelRunner:
         hidden_size = config.hf_config.hidden_size
         hidden_type = config.torch_dtype
         self.max_bs = self.config.max_num_seqs
+
+        # >>> phase11_per_phase_mtp_alloc <<<
+        # Per-Phase Relaxed MTP: per-sequence reasoning-phase tensor.
+        # 0=NOT_THINKING (model is in answer phase), 1=THINKING (inside <think>...</think>),
+        # 2=DONE_THINKING (already saw </think>, back in answer phase).
+        # Allocated unconditionally (sized by max_num_seqs); the Triton rejection
+        # sampler kernel reads/writes during sampling. Connection to the
+        # rejection_sampler module via the module-level set_spec_phase_tensor()
+        # setter -- avoids any Python setattr in the forward path (cudagraph-safe).
+        self.spec_phase = torch.zeros(self.max_bs, dtype=torch.int8, device=self.device)
+        try:
+            from atom.model_ops import rejection_sampler as _rs_mod
+            if hasattr(_rs_mod, "set_spec_phase_tensor"):
+                _rs_mod.set_spec_phase_tensor(self.spec_phase)
+        except Exception:
+            pass  # rejection_sampler may not have setter -> per-phase lever is NULL-OP
+        # <<< phase11_per_phase_mtp_alloc <<<
+
         self.max_num_batched_tokens = config.max_num_batched_tokens
         i64_kwargs = {"dtype": torch.int64, "device": self.device}
         i32_kwargs = {"dtype": torch.int32, "device": self.device}
@@ -1418,6 +1436,18 @@ class ModelRunner:
     def prepare_inputs(self, batch: ScheduledBatch, input_ids: torch.Tensor = None):
         is_prefill = batch.total_tokens_num_prefill > 0
         bs = batch.total_seqs_num
+
+        # >>> phase11_per_phase_mtp_reset <<<
+        # Reset spec_phase for newly-prefilling sequences (slot indices 0..num_prefill_seqs-1).
+        # Each new request begins in phase 0 (NOT_THINKING). Decode-only batches leave
+        # phase untouched -- the rejection sampler kernel advances it as <think>/</think>
+        # tokens are observed. Runs Python-side, OUTSIDE the captured decode cudagraph.
+        if os.environ.get("ATOM_ENABLE_PER_PHASE_RELAXED_MTP", "0") == "1" and is_prefill:
+            _num_prefill = batch.total_seqs_num_prefill
+            if _num_prefill > 0 and hasattr(self, "spec_phase"):
+                self.spec_phase[:_num_prefill].zero_()
+        # <<< phase11_per_phase_mtp_reset <<<
+
         num_scheduled_tokens = np.asarray(batch.num_scheduled_tokens)
         cu_seqlens_q, arange = self._get_cumsum_and_arange(num_scheduled_tokens)
         num_input_tokens, num_tokens_across_dp = self._preprocess(batch)
