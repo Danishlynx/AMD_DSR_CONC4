@@ -95,6 +95,14 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # --- MTP (relaxed mtp for quantized mtp) ---
     "ATOM_ENABLE_RELAXED_MTP": lambda: os.getenv("ATOM_ENABLE_RELAXED_MTP", "0").lower()
     == "1",
+    # --- Phase 11 v3: per-phase relaxed MTP (TRT-LLM thinking port) ---
+    # When enabled, the rejection sampler applies relaxed top-N=10 acceptance
+    # ONLY inside <think>...</think> reasoning blocks; outside thinking it uses
+    # the baseline RELAXED_TOP_N=8 (never stricter than baseline anywhere).
+    "ATOM_ENABLE_PER_PHASE_RELAXED_MTP": lambda: os.getenv(
+        "ATOM_ENABLE_PER_PHASE_RELAXED_MTP", "0"
+    ).lower()
+    == "1",
 }
 
 

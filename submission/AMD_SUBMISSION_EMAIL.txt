@@ -1,0 +1,100 @@
+To:      ai_dev_contests@amd.com
+Cc:      daniel.huang@amd.com
+Subject: AMD Hackathon Submission -- DSR1 / MI355X CONC=4 -- Phase 11 v3 (TRT-LLM Thinking Port) -- 2/4 Gates -- Danish Lynx
+
+Hi Daniel, hi AMD AI Dev Contests team,
+
+Please find my submission for the DeepSeek-R1 (MXFP4) on MI355X track below. All five items from section 4.6 are linked.
+
+----------------------------------------------------------------
+HEADLINE RESULT (CONC=4, official kimbochen N=3 harness, Apr 30)
+----------------------------------------------------------------
+  Gates:        2/4   (GSM8K PASS, Interactivity PASS)
+  GSM8K (N=3):  0.9318   (gate >= 0.93)        PASS
+  Median TPOT:  5.641 ms (-0.661 ms vs L0-v2 baseline 6.302 ms)
+  Interactiv.:  177.26   (gate >= 165)         PASS  (+1 gate, was 158.68 FAIL)
+  Median E2E:   6210 ms  (gate <= 5000)        FAIL (off 1210)
+  Tput / GPU:   1449     (gate >= 1500)        FAIL (off 51)
+
+This PR contributes the +1 gate (Interactivity FAIL -> PASS) via a -0.661 ms
+TPOT delta from a first-party Triton sampler kernel that ports TRT-LLM's
+`use_relaxed_acceptance_for_thinking` to ATOM/AITER for DeepSeek-R1. Default
+OFF -> bit-identical to upstream ATOM.
+
+Hardware: 4x AMD Instinct MI355X (gfx950, CDNA4), TP=4 single-replica, MTP=3,
+FP8 KV cache. Best snapshot: rocm/atom-dev:dsr1_apr30_phase11_v3_2of4
+(sha c58cf2ce4512).
+
+----------------------------------------------------------------
+4.6 SUBMISSION ITEMS
+----------------------------------------------------------------
+
+1. GitHub repository link with optimized code:
+   https://github.com/Danishlynx/AMD_DSR_CONC4
+
+2. Pull Request describing changes:
+   https://github.com/Danishlynx/AMD_DSR_CONC4/pull/4
+   (16 files, +1,713 lines; 3 ATOM source files modified +202 LOC; 0 conflicts)
+
+3. Leaderboard results screenshot / data:
+   Raw evidence pack (kimbochen 4-iter JSON, GSM8K lm_eval log, boot log) at:
+   https://github.com/Danishlynx/AMD_DSR_CONC4/tree/submission/submission/bench_results/apr30_phase11_per_phase_mtp_v3_KEEP_2of4
+   (evidence.tgz, 288 KB)
+
+4. Performance metrics documentation (throughput per GPU):
+   https://github.com/Danishlynx/AMD_DSR_CONC4/blob/submission/submission/PERFORMANCE_METRICS.md
+
+5. Technical documentation explaining approach:
+   https://github.com/Danishlynx/AMD_DSR_CONC4/blob/submission/submission/TECHNICAL_APPROACH.md
+
+----------------------------------------------------------------
+APPROACH AT A GLANCE
+----------------------------------------------------------------
+
+  Lever:   Per-Phase Relaxed-Acceptance MTP (TRT-LLM "thinking" port)
+  Source:  3 ATOM files modified (+202 LOC, 0 removed):
+             - atom/utils/envs.py                   (+8)   env flag
+             - atom/model_engine/model_runner.py    (+30)  GPU phase tensor + plumbing
+             - atom/model_ops/rejection_sampler.py  (+164) Triton kernel + dispatcher
+
+  Mechanism:
+    A per-sequence int8 phase tensor (0=NOT_THINKING / 1=THINKING / 2=DONE)
+    tracks whether each request is inside a <think>...</think> reasoning block.
+    A new Triton kernel `rejection_phased_sample_kernel` branches per-request:
+      inside  <think>...</think>:  accept if draft in top-N=10  (relaxed_delta=0.6)
+      outside <think>...</think>:  accept if draft in top-N=8   (= baseline)
+    The kernel scans committed tokens for the DeepSeek-R1 <think>/</think> token
+    IDs (128798 / 128799) and updates phase via tl.store -- no Python setattr in
+    the forward path, so the kernel stays cudagraph-safe.
+
+  Why this works:
+    Reasoning-phase tokens have a flatter target distribution -> top-N=10
+    accepts more drafts without harming GSM8K accuracy. Answer-phase tokens are
+    peakier -> stay at top-N=8 to preserve correctness. Result: same draft
+    network, higher acceptance only where it's safe -> lower TPOT -> +1 gate.
+
+  Activation:
+    export ATOM_ENABLE_PER_PHASE_RELAXED_MTP=1
+    (default 0 = bit-identical to upstream)
+
+----------------------------------------------------------------
+MEASUREMENT DISCIPLINE
+----------------------------------------------------------------
+
+All authoritative numbers above come from the official kimbochen harness:
+ISL=8192, OSL=1024, num_prompts=40, conc=4, num_warmups=8, 4-iter median(2,3,4)
+x N=3 boots; GSM8K via lm_eval N=3 median. Earlier informal-bench measurements
+(Apr 14-26) are documented as historical context only and clearly marked
+NOT authoritative in PERFORMANCE_METRICS.md.
+
+Bonus reference at CONC=32 (Apr 27, pre-Phase-11-v3): same stack scored 2/4
+gates (GSM 0.9431 PASS, Interactivity 56.17 PASS; E2E off 5.8%, Tput off 1.8%).
+
+----------------------------------------------------------------
+
+Happy to walk through the kernel, the measurement methodology, or reproduce
+the result on demand. Thank you for organising this contest.
+
+Best,
+Danish Lynx
+danishlynx@gmail.com
